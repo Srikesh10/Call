@@ -1,0 +1,3259 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CCALL Enterprise Agent</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        // FORCE REDIRECT TO NGROK (Immediate)
+        (function () {
+            const requiredHost = "tinselly-incompliant-earlean.ngrok-free.dev";
+            const currentHost = window.location.hostname;
+
+            if (currentHost === "localhost" || currentHost === "127.0.0.1") {
+                console.warn("Localhost detected. Redirecting to Ngrok...");
+                window.location.href = `https://${requiredHost}${window.location.pathname}${window.location.search}${window.location.hash}`;
+            }
+        })();
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            color: #1f2937;
+        }
+
+        /* Agent Mic Animation (Compact) */
+        .mic-btn-modern {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            color: white;
+            font-size: 24px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            transition: all 0.2s ease;
+        }
+
+        .mic-btn-modern:hover {
+            transform: scale(1.05);
+        }
+
+        .mic-btn-modern.listening {
+            background: #ef4444;
+            animation: pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+
+        .mic-btn-modern.processing {
+            background: #f59e0b;
+            animation: spin 1s linear infinite;
+        }
+
+        .mic-btn-modern.speaking {
+            background: #10b981;
+            box-shadow: 0 0 0 4px #d1fae5;
+        }
+
+        @keyframes pulse-ring {
+            0% {
+                transform: scale(0.95);
+                box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+            }
+
+            70% {
+                transform: scale(1);
+                box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+            }
+
+            100% {
+                transform: scale(0.95);
+                box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+            }
+        }
+
+        @keyframes spin {
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Chat Bubbles */
+        .msg-bubble {
+            max-width: 85%;
+            padding: 10px 14px;
+            border-radius: 12px;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            margin-bottom: 12px;
+        }
+
+        .msg-user {
+            background-color: #e5e7eb;
+            color: #111827;
+            align-self: flex-end;
+            border-bottom-right-radius: 2px;
+        }
+
+        .msg-agent {
+            background-color: #eff6ff;
+            color: #1e3a8a;
+            border: 1px solid #bfdbfe;
+            align-self: flex-start;
+            border-bottom-left-radius: 2px;
+        }
+
+        /* Sidebar Active State */
+        .nav-item.active {
+            background-color: #e0f2fe;
+            color: #0284c7;
+            border-right: 3px solid #0284c7;
+        }
+    </style>
+</head>
+
+<body class="flex h-screen overflow-hidden">
+
+    <!-- FULL PAGE LOADING OVERLAY -->
+    <div id="fullPageLoader" class="fixed inset-0 bg-white z-50 flex items-center justify-center">
+        <div class="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600"></div>
+    </div>
+
+    <!-- GLASSMORPHISM OVERLAY REMOVED - NOW USING /login PAGE -->
+
+    <!-- SIDEBAR NAVIGATION -->
+    <aside class="w-64 bg-white border-r border-gray-200 flex flex-col shadow-sm z-10">
+        <div class="h-16 flex items-center px-8 border-b border-gray-200 bg-gray-50">
+            <i class="fa-solid fa-robot text-blue-600 text-xl mr-3"></i>
+            <h1 class="text-lg font-bold text-gray-800 tracking-tight">CCALL<span class="text-blue-600">.AI</span></h1>
+        </div>
+
+        <nav class="flex-1 px-4 space-y-2 overflow-y-auto">
+            <button onclick="window.location.href='/workflows'" id="nav-workflows"
+                class="w-full flex items-center space-x-3 px-4 py-3 text-gray-600 rounded-xl hover:bg-gray-50 transition-all group">
+                <i class="fa-solid fa-diagram-project text-lg group-hover:text-cyan-600"></i>
+                <span class="font-medium">Workflows</span>
+            </button>
+            <button onclick="showSection('config')" id="nav-config"
+                class="w-full flex items-center space-x-3 px-4 py-3 text-gray-600 rounded-xl hover:bg-gray-50 transition-all group active bg-blue-50 text-blue-700 border-r-2 border-blue-600">
+                <i class="fa-solid fa-sliders text-lg group-hover:text-blue-600"></i>
+                <span class="font-medium">Configuration</span>
+            </button>
+            <button onclick="showSection('knowledge')" id="nav-knowledge"
+                class="w-full flex items-center space-x-3 px-4 py-3 text-gray-600 rounded-xl hover:bg-gray-50 transition-all group">
+                <i class="fa-solid fa-book text-lg group-hover:text-purple-600"></i>
+                <span class="font-medium">Knowledge Base</span>
+            </button>
+            <button onclick="showSection('leads')" id="nav-leads"
+                class="w-full flex items-center space-x-3 px-4 py-3 text-gray-600 rounded-xl hover:bg-gray-50 transition-all group">
+                <i class="fa-solid fa-user-group text-lg group-hover:text-green-600"></i>
+                <span class="font-medium">Customer Leads</span>
+            </button>
+            <button onclick="showSection('history')" id="nav-history"
+                class="w-full flex items-center space-x-3 px-4 py-3 text-gray-600 rounded-xl hover:bg-gray-50 transition-all group">
+                <i class="fa-solid fa-clock-rotate-left text-lg group-hover:text-orange-600"></i>
+                <span class="font-medium">Call History</span>
+            </button>
+            <button onclick="showSection('integrations')" id="nav-integrations"
+                class="w-full flex items-center space-x-3 px-4 py-3 text-gray-600 rounded-xl hover:bg-gray-50 transition-all group">
+                <i class="fa-solid fa-puzzle-piece text-lg group-hover:text-pink-600"></i>
+                <span class="font-medium">Integrations</span>
+            </button>
+            <button onclick="showSection('outbound')" id="nav-outbound"
+                class="w-full flex items-center space-x-3 px-4 py-3 text-gray-600 rounded-xl hover:bg-gray-50 transition-all group">
+                <i class="fa-solid fa-phone-volume text-lg group-hover:text-blue-600"></i>
+                <span class="font-medium">Outbound Calls</span>
+            </button>
+            <div class="border-t border-gray-200 my-2 pt-2">
+                <button onclick="showSection('profile')" id="nav-profile"
+                    class="w-full flex items-center space-x-3 px-4 py-3 text-gray-600 rounded-xl hover:bg-gray-50 transition-all group">
+                    <i class="fa-solid fa-user-circle text-lg group-hover:text-indigo-600"></i>
+                    <span class="font-medium">User Profile</span>
+                </button>
+            </div>
+        </nav>
+    </aside>
+
+    <!-- CONTENT AREA -->
+    <main class="flex-1 flex flex-col min-w-0 bg-gray-50">
+
+        <!-- TOP HEADER -->
+        <header class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 shadow-sm">
+            <h2 id="page-title" class="text-xl font-bold text-gray-800">Agent Configuration</h2>
+            <div class="flex items-center space-x-4">
+                <button onclick="saveAndReload()"
+                    class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition shadow-sm flex items-center">
+                    <i class="fa-solid fa-save mr-2"></i> Save & Deploy
+                </button>
+            </div>
+        </header>
+
+        <!-- SPLIT VIEW CONTAINER -->
+        <div class="flex-1 flex overflow-hidden">
+
+            <!-- LEFT: WORKSPACE (Config/Table) -->
+            <div class="flex-1 overflow-y-auto p-8" id="workspace">
+
+                <!-- 1. CONFIG PANEL -->
+                <div id="section-config" class="space-y-6 max-w-3xl">
+                    <!-- MOVED: Google Integration -->
+
+
+                    <!-- GOOGLE DEPENDENT SETTINGS REMOVED (Legacy Automation Rules & Calendar) -->
+
+
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                        <h3 class="text-base font-semibold text-gray-900 mb-4 border-b border-gray-100 pb-2">Business
+                            Identity</h3>
+                        <div class="grid grid-cols-2 gap-6">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Business Name</label>
+                                <input type="text" id="business_name"
+                                    class="w-full border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 bg-gray-50 border"
+                                    placeholder="My Business">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Voice Persona</label>
+                                <select id="voice_id_select"
+                                    class="w-full border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 bg-gray-50 border">
+                                    <option value="3b554273-4299-48b9-9aaf-eefd438e3941">🇮🇳 Indian Female
+                                        (Professional)</option>
+                                    <option value="other">🇺🇸 US Female (Neutral)</option>
+                                </select>
+                                <input type="hidden" id="voice_id"> <!-- Stores actual UUID -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                        <h3 class="text-base font-semibold text-gray-900 mb-4 border-b border-gray-100 pb-2">Supported
+                            Languages</h3>
+                        <p class="text-xs text-gray-500 mb-4">Select the languages your agent should detect.</p>
+
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <!-- English -->
+                            <label
+                                class="flex items-center space-x-2 cursor-pointer p-2 rounded hover:bg-gray-50 border border-transparent hover:border-gray-200">
+                                <input type="checkbox"
+                                    class="language-checkbox form-checkbox h-4 w-4 text-blue-600 rounded" value="en"
+                                    checked disabled>
+                                <span class="text-sm text-gray-700 font-medium">English 🇺🇸</span>
+                            </label>
+
+                            <label
+                                class="flex items-center space-x-2 cursor-pointer p-2 rounded hover:bg-gray-50 border border-transparent hover:border-gray-200">
+                                <input type="checkbox"
+                                    class="language-checkbox form-checkbox h-4 w-4 text-blue-600 rounded" value="hi">
+                                <span class="text-sm text-gray-700">Hindi 🇮🇳</span>
+                            </label>
+
+                            <label
+                                class="flex items-center space-x-2 cursor-pointer p-2 rounded hover:bg-gray-50 border border-transparent hover:border-gray-200">
+                                <input type="checkbox"
+                                    class="language-checkbox form-checkbox h-4 w-4 text-blue-600 rounded" value="te">
+                                <span class="text-sm text-gray-700">Telugu 🇮🇳</span>
+                            </label>
+
+                            <label
+                                class="flex items-center space-x-2 cursor-pointer p-2 rounded hover:bg-gray-50 border border-transparent hover:border-gray-200">
+                                <input type="checkbox"
+                                    class="language-checkbox form-checkbox h-4 w-4 text-blue-600 rounded" value="ta">
+                                <span class="text-sm text-gray-700">Tamil 🇮🇳</span>
+                            </label>
+
+                            <label
+                                class="flex items-center space-x-2 cursor-pointer p-2 rounded hover:bg-gray-50 border border-transparent hover:border-gray-200">
+                                <input type="checkbox"
+                                    class="language-checkbox form-checkbox h-4 w-4 text-blue-600 rounded" value="kn">
+                                <span class="text-sm text-gray-700">Kannada 🇮🇳</span>
+                            </label>
+
+                            <label
+                                class="flex items-center space-x-2 cursor-pointer p-2 rounded hover:bg-gray-50 border border-transparent hover:border-gray-200">
+                                <input type="checkbox"
+                                    class="language-checkbox form-checkbox h-4 w-4 text-blue-600 rounded" value="ml">
+                                <span class="text-sm text-gray-700">Malayalam 🇮🇳</span>
+                            </label>
+
+                            <label
+                                class="flex items-center space-x-2 cursor-pointer p-2 rounded hover:bg-gray-50 border border-transparent hover:border-gray-200">
+                                <input type="checkbox"
+                                    class="language-checkbox form-checkbox h-4 w-4 text-blue-600 rounded" value="ur">
+                                <span class="text-sm text-gray-700">Urdu 🇵🇰</span>
+                            </label>
+                        </div>
+                    </div>
+
+
+
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex-1 flex flex-col relative">
+                        <div class="flex justify-between items-center mb-4">
+                            <div>
+                                <h3 class="text-base font-semibold text-gray-900">Agent System Prompt</h3>
+                                <p class="text-xs text-gray-500">Core Logic & Behavior Rules</p>
+                            </div>
+                            <!-- GENERATE BUTTON (Black) -->
+                            <button onclick="toggleGenPanel()"
+                                class="bg-black hover:bg-gray-800 text-white text-sm font-bold py-2 px-4 rounded shadow-sm flex items-center transition">
+                                <i class="fa-solid fa-wand-magic-sparkles mr-2 text-yellow-400"></i> Generate / Refine
+                            </button>
+                        </div>
+
+                        <!-- GENERATOR PANEL (Hidden by default) -->
+                        <div id="genPanel"
+                            class="hidden mb-4 bg-gray-50 border border-gray-200 rounded-lg p-4 animate-fade-in">
+                            <label class="block text-xs font-bold text-gray-700 uppercase mb-2">Refine Prompt
+                                Instruction</label>
+                            <div class="flex gap-2 mb-3">
+                                <input type="text" id="promptGoal"
+                                    placeholder="e.g. 'Make him a rude pirate' or 'Add a rule to always ask for email'..."
+                                    class="flex-1 shadow-sm border-gray-300 rounded-md p-2 text-sm focus:ring-black focus:border-black">
+                                <button onclick="generatePrompt()" id="genBtn"
+                                    class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+                                    Go
+                                </button>
+                            </div>
+
+                            <!-- PREVIEW / ACTIONS -->
+                            <div id="promptPreviewArea" class="hidden">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-xs font-bold text-green-600 uppercase">✨ New Suggestion
+                                        Ready</span>
+                                </div>
+                                <textarea id="generatedPromptPreview" rows="6"
+                                    class="w-full bg-white border border-green-300 rounded-md p-3 text-sm text-gray-800 shadow-inner mb-2"></textarea>
+                                <div class="flex gap-2">
+                                    <!-- USE BUTTON (Black) -->
+                                    <button onclick="acceptPrompt()"
+                                        class="flex-1 bg-black hover:bg-gray-800 text-white text-sm font-bold py-2 rounded shadow-lg transition">
+                                        Use This Prompt
+                                    </button>
+                                    <!-- DISCARD BUTTON (White) -->
+                                    <button onclick="discardPrompt()"
+                                        class="flex-1 bg-white border border-gray-300 text-gray-700 text-sm font-bold py-2 rounded hover:bg-gray-50 transition">
+                                        Discard
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <textarea id="system_instruction"
+                            class="w-full flex-1 border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 font-mono text-sm p-3 bg-gray-50 border text-gray-800 transition"
+                            rows="12"></textarea>
+
+                        <!-- Loading Spinner Overlay -->
+                        <div id="systemPromptLoadingSpinner"
+                            class="absolute inset-0 bg-white bg-opacity-90 flex items-center justify-center rounded-md">
+                            <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. KNOWLEDGE PANEL -->
+                <div id="section-knowledge" class="hidden space-y-6 max-w-3xl">
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
+                        <div class="mx-auto h-12 w-12 text-gray-400 mb-3">
+                            <i class="fa-solid fa-file-csv text-4xl"></i>
+                        </div>
+                        <h3 class="text-lg font-medium text-gray-900">Upload Data Source</h3>
+                        <p class="mt-1 text-sm text-gray-500">Upload a CSV file with your inventory (Model, Price,
+                            Specs).</p>
+
+                        <div class="mt-6 flex justify-center">
+                            <label
+                                class="relative cursor-pointer bg-white border border-gray-300 rounded-md shadow-sm py-2 px-4 inline-flex items-center text-sm font-medium text-gray-700 hover:bg-gray-50 focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500">
+                                <span>Select .csv File</span>
+                                <input id="inventoryFile" name="file-upload" type="file" accept=".csv" class="sr-only">
+                            </label>
+                            <button onclick="uploadInventory()"
+                                class="ml-3 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none">
+                                Upload
+                            </button>
+                        </div>
+                        <p id="fileName" class="mt-2 text-xs text-gray-400 italic"></p>
+                    </div>
+
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                        <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                            <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Data Preview
+                                (cars.csv)</h3>
+                        </div>
+                        <pre id="csvPreview" class="p-4 text-xs font-mono text-gray-600 overflow-x-auto bg-white"></pre>
+                    </div>
+                </div>
+
+                <!-- 3. LEADS PANEL -->
+                <div id="section-leads" class="hidden">
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                        <div class="px-6 py-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
+                            <h3 class="text-sm font-medium text-gray-900">Recent Customer Inquiries</h3>
+                            <button onclick="loadLeads()" class="text-blue-600 hover:text-blue-800 text-xs font-medium">
+                                <i class="fa-solid fa-rotate mr-1"></i> Refresh
+                            </button>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th scope="col"
+                                            class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Time</th>
+                                        <th scope="col"
+                                            class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Customer</th>
+                                        <th scope="col"
+                                            class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Query</th>
+                                        <th scope="col"
+                                            class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Action / Intent</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="leadsTableBody" class="bg-white divide-y divide-gray-200 text-sm">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. INTEGRATIONS PANEL -->
+                <div id="section-integrations" class="hidden space-y-6 max-w-3xl">
+
+                    <!-- 1. GOOGLE INTEGRATION -->
+
+
+
+
+
+
+                    <!-- 3. TWILIO SUBACCOUNT STATUS -->
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                        <h3 class="text-base font-semibold text-gray-900 mb-4 border-b border-gray-100 pb-2">
+                            <i class="fa-solid fa-cloud mr-2 text-blue-600"></i>Twilio Integration
+                        </h3>
+                        <p class="text-xs text-gray-500 mb-4">
+                            Your Twilio subaccount is automatically provisioned. All voice calling is managed through
+                            this account.
+                        </p>
+
+                        <!-- Status Display -->
+                        <div id="twilio-status-container" class="space-y-4">
+                            <!-- Loading State -->
+                            <div id="twilio-loading" class="flex items-center justify-center py-4">
+                                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                                <span class="ml-3 text-gray-600">Loading Twilio information...</span>
+                            </div>
+
+                            <!-- Loaded State (hidden initially) -->
+                            <div id="twilio-loaded" class="hidden space-y-3">
+                                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                    <div class="flex items-center">
+                                        <i class="fa-solid fa-circle-check text-green-500 mr-3"></i>
+                                        <div>
+                                            <p class="text-sm font-medium text-gray-900">Status</p>
+                                            <p class="text-xs text-gray-500">Subaccount Provisioning</p>
+                                        </div>
+                                    </div>
+                                    <span id="twilio_status_badge"
+                                        class="px-3 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                                        Active
+                                    </span>
+                                </div>
+
+                                <div class="p-3 bg-gray-50 rounded-lg">
+                                    <p class="text-sm font-medium text-gray-700 mb-1">Subaccount SID</p>
+                                    <code id="twilio_sid"
+                                        class="text-xs bg-white px-2 py-1 rounded border border-gray-200 text-gray-800 font-mono">
+                                        Loading...
+                                    </code>
+                                </div>
+
+                                <div class="p-3 bg-gray-50 rounded-lg">
+                                    <p class="text-sm font-medium text-gray-700 mb-1">Friendly Name</p>
+                                    <span id="twilio_friendly_name" class="text-sm text-gray-800">--</span>
+                                </div>
+
+                                <div class="p-3 bg-gray-50 rounded-lg">
+                                    <p class="text-sm font-medium text-gray-700 mb-1">Created</p>
+                                    <span id="twilio_created" class="text-sm text-gray-800">--</span>
+                                </div>
+                            </div>
+
+                            <!-- Not Provisioned State (hidden initially) -->
+                            <div id="twilio-not-provisioned"
+                                class="hidden p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                <div class="flex items-start">
+                                    <i class="fa-solid fa-triangle-exclamation text-yellow-600 mr-3 mt-1"></i>
+                                    <div>
+                                        <p class="text-sm font-medium text-yellow-900">Twilio Not Provisioned</p>
+                                        <p class="text-xs text-yellow-700 mt-1">Your Twilio subaccount hasn't been
+                                            created yet.</p>
+                                        <button onclick="provisionTwilioNow()"
+                                            class="mt-3 px-4 py-2 bg-yellow-600 text-white text-sm rounded hover:bg-yellow-700 transition">
+                                            <i class="fa-solid fa-wand-magic-sparkles mr-2"></i>Provision Now
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Error State (hidden initially) -->
+                            <div id="twilio-error" class="hidden p-4 bg-red-50 border border-red-200 rounded-lg">
+                                <div class="flex items-start">
+                                    <i class="fa-solid fa-circle-exclamation text-red-600 mr-3 mt-1"></i>
+                                    <div>
+                                        <p class="text-sm font-medium text-red-900">Error Loading Twilio Status</p>
+                                        <p id="twilio_error_message" class="text-xs text-red-700 mt-1">--</p>
+                                        <button onclick="loadTwilioStatus()"
+                                            class="mt-3 px-4 py-2 bg-red-600 text-white text-sm rounded hover:bg-red-700 transition">
+                                            <i class="fa-solid fa-rotate mr-2"></i>Retry
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <p class="text-xs text-gray-400 mt-4 italic">
+                            <i class="fa-solid fa-shield-halved mr-1"></i>
+                            Credentials are securely encrypted and never exposed to the frontend.
+                        </p>
+                    </div>
+                </div>
+
+
+
+                <!-- 5. OUTBOUND CALLS PANEL -->
+                <div id="section-outbound" class="hidden space-y-6 max-w-4xl">
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-2xl font-bold text-gray-900">
+                            <i class="fa-solid fa-phone-volume text-blue-600 mr-2"></i>
+                            Outbound Calls
+                        </h2>
+                    </div>
+
+                    <!-- Make Call Card & Context Grid -->
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+                        <div
+                            class="lg:col-span-2 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-200 shadow-sm relative">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-lg font-semibold text-gray-800">
+                                    <i class="fa-solid fa-phone-plus mr-2 text-blue-600"></i>
+                                    Make New Call
+                                </h3>
+                                <button onclick="showSheetContactsModal()"
+                                    class="px-3 py-1.5 bg-green-600 text-white text-xs font-semibold rounded hover:bg-green-700 transition flex items-center gap-1">
+                                    <i class="fa-solid fa-table mr-1"></i>
+                                    Import from Sheet
+                                </button>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <!-- From Number -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                                        <i class="fa-solid fa-circle-user mr-1"></i>
+                                        From Number
+                                    </label>
+                                    <input type="tel" id="call-from-number" list="twilio-numbers-list"
+                                        placeholder="Type or select number..."
+                                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    <datalist id="twilio-numbers-list">
+                                        <!-- Will be populated by loadTwilioNumbers() -->
+                                    </datalist>
+                                    <p class="text-xs text-gray-500 mt-1">
+                                        <i class="fa-solid fa-info-circle mr-1"></i>
+                                        Type manually or select from your Twilio numbers
+                                    </p>
+                                </div>
+
+                                <!-- To Number -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                                        <i class="fa-solid fa-phone mr-1"></i>
+                                        To Number
+                                    </label>
+                                    <input type="tel" id="call-to-number" list="contacts-list"
+                                        placeholder="Type or select from sheet..."
+                                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    <datalist id="contacts-list">
+                                        <!-- Will be populated from Google Sheets -->
+                                    </datalist>
+                                    <p class="text-xs text-gray-500 mt-1" id="sheet-status-text">
+                                        <i class="fa-solid fa-info-circle mr-1"></i>
+                                        Type manually or import contacts from sheet
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Make Call Button -->
+                            <button id="make-call-btn" onclick="makeOutboundCall()"
+                                class="mt-4 w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold py-3 rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-md hover:shadow-lg">
+                                <i class="fa-solid fa-phone mr-2"></i>
+                                Make Call
+                            </button>
+                        </div>
+
+                        <!-- Right Column: Context Panel -->
+                        <div
+                            class="bg-white rounded-2xl border border-gray-100 shadow-sm h-full flex flex-col overflow-hidden">
+                            <!-- Header -->
+                            <div
+                                class="bg-gray-50 px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                                <h3 class="text-xs font-bold text-gray-500 uppercase tracking-widest">
+                                    <i class="fa-solid fa-address-card mr-2 text-blue-500"></i> Contact Context
+                                </h3>
+                                <div id="context-badge"
+                                    class="hidden px-2 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-bold rounded-full">
+                                    ACTIVE</div>
+                            </div>
+
+                            <!-- Content Area -->
+                            <div class="p-5 flex-1 bg-white overflow-y-auto min-h-[200px]">
+                                <!-- Placeholder -->
+                                <div id="context-placeholder"
+                                    class="h-full flex flex-col items-center justify-center text-center py-6 text-gray-300">
+                                    <div
+                                        class="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-3">
+                                        <i class="fa-regular fa-user text-3xl opacity-50"></i>
+                                    </div>
+                                    <p class="text-sm font-medium text-gray-400">No Contact Selected</p>
+                                    <p class="text-xs text-gray-300 mt-1 max-w-[150px]">Select a contact from the list
+                                        to view details for the agent.</p>
+                                </div>
+
+                                <!-- Dynamic Content Container -->
+                                <div id="context-content" class="hidden space-y-4">
+                                    <!-- JS will inject here -->
+                                </div>
+                            </div>
+
+                            <!-- Footer Hint -->
+                            <div
+                                class="bg-gray-50 px-4 py-2 text-[10px] text-gray-400 text-center border-t border-gray-100">
+                                <i class="fa-solid fa-robot mr-1"></i> Phone Agent will use this info
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Google Sheets Contact Import Modal -->
+                    <div id="sheet-contacts-modal"
+                        class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                        <div class="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full mx-4">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-lg font-bold text-gray-900">
+                                    <i class="fa-solid fa-table text-green-600 mr-2"></i>
+                                    Import Contacts from Sheet
+                                </h3>
+                                <button onclick="closeSheetContactsModal()" class="text-gray-400 hover:text-gray-600">
+                                    <i class="fa-solid fa-times text-xl"></i>
+                                </button>
+                            </div>
+
+                            <!-- Sheet Selection -->
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Select Sheet</label>
+                                <select id="contacts-sheet-dropdown" onchange="loadContactsFromSheet()"
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
+                                    <option value="">Loading sheets...</option>
+                                </select>
+                            </div>
+
+                            <!-- Column Selection -->
+                            <div class="mb-4" id="column-selection-container" style="display: none;">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Phone Number
+                                    Column</label>
+                                <select id="phone-column-dropdown"
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
+                                    <option value="">Select a column...</option>
+                                </select>
+                                <p class="text-xs text-gray-500 mt-1">Select the column containing phone numbers</p>
+                            </div>
+                            <!-- Import Button -->
+                            <button onclick="importContactsFromSheet()"
+                                class="w-full bg-green-600 text-white font-semibold py-2 rounded-lg hover:bg-green-700 transition">
+                                <i class="fa-solid fa-file-import mr-2"></i>
+                                Import Contacts
+                            </button>
+
+                            <!-- Status -->
+                            <div id="import-status" class="mt-4 hidden">
+                                <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
+                                    <i class="fa-solid fa-spinner fa-spin mr-2"></i>
+                                    <span id="import-status-text">Loading...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- System Instructions -->
+                    <div class="mb-8 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-lg font-semibold text-gray-800">
+                                <i class="fa-solid fa-robot text-purple-600 mr-2"></i>
+                                System Instructions
+                            </h3>
+                            <div class="flex space-x-2">
+                                <button onclick="saveOutboundInstruction()"
+                                    class="text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors">
+                                    <i class="fa-solid fa-save mr-1"></i>
+                                    Save Default
+                                </button>
+                                <button onclick="document.getElementById('system-prompt').value = ''"
+                                    class="text-gray-400 hover:text-gray-600 text-sm font-medium transition-colors">
+                                    <i class="fa-solid fa-eraser mr-1"></i>
+                                    Clear
+                                </button>
+                            </div>
+                        </div>
+                        <p class="text-sm text-gray-500 mb-3">
+                            Provide specific instructions for the AI agent for this call (e.g., "Be polite but firm",
+                            "Ask about the invoice date").
+                            <span
+                                class="block mt-1 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded inline-block">These
+                                run alongside the main prompt.</span>
+                        </p>
+                        <textarea id="system-prompt" rows="3"
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 shadow-sm transition-all resize-y placeholder-gray-400 text-sm"
+                            placeholder="Enter system instructions here..."></textarea>
+                    </div>
+
+                    <!-- AUTOMATION RULES (OUTBOUND) REMOVED -->
+
+
+                    <!-- Call History -->
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+                        <div class="flex items-center justify-between p-6 border-b border-gray-200">
+                            <h3 class="text-lg font-semibold text-gray-800">
+                                <i class="fa-solid fa-clock-rotate-left text-purple-600 mr-2"></i>
+                                Recent Calls
+                            </h3>
+                            <button onclick="loadCallHistory()"
+                                class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                                <i class="fa-solid fa-rotate mr-1"></i>
+                                Refresh
+                            </button>
+                        </div>
+
+                        <div class="overflow-x-auto">
+                            <table class="w-full">
+                                <thead class="bg-gray-50 border-b border-gray-200">
+                                    <tr>
+                                        <th
+                                            class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Date/Time</th>
+                                        <th
+                                            class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            To</th>
+                                        <th
+                                            class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            From</th>
+                                        <th
+                                            class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Duration</th>
+                                        <th
+                                            class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Status</th>
+                                        <th
+                                            class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        <th
+                                            class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Cost</th>
+                                        <th
+                                            class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Prompt</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="call-history-tbody" class="bg-white divide-y divide-gray-200">
+                                    <tr>
+                                        <td colspan="6" class="px-6 py-8 text-center text-gray-400">
+                                            <i class="fa-solid fa-spinner fa-spin text-2xl mb-2"></i>
+                                            <p class="text-sm">Loading call history...</p>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Pagination -->
+                        <div id="call-history-pagination"
+                            class="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+                            <button onclick="loadCallHistory(callHistoryPage - 1)" id="prev-page-btn"
+                                class="px-4 py-2 text-sm text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                                <i class="fa-solid fa-chevron-left mr-1"></i>
+                                Previous
+                            </button>
+                            <span class="text-sm text-gray-600">
+                                Page <span id="current-page">1</span>
+                            </span>
+                            <button onclick="loadCallHistory(callHistoryPage + 1)" id="next-page-btn"
+                                class="px-4 py-2 text-sm text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                                Next
+                                <i class="fa-solid fa-chevron-right ml-1"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+
+
+                <!-- 6. CALL HISTORY PANEL -->
+                <div id="section-history" class="hidden">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-xl font-bold text-gray-800">Call Logs</h2>
+                        <button onclick="loadCalls()" class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                            <i class="fa-solid fa-rotate mr-1"></i> Refresh
+                        </button>
+                    </div>
+
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th
+                                            class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Time</th>
+                                        <th
+                                            class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Status</th>
+                                        <th
+                                            class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Analysis</th>
+                                        <th
+                                            class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Transcript</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="callsTableBody" class="bg-white divide-y divide-gray-200 text-sm">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TRANSCRIPT MODAL -->
+                <div id="transcriptModal"
+                    class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+                    <div class="relative top-20 mx-auto p-5 border w-3/4 max-w-2xl shadow-lg rounded-md bg-white">
+                        <div class="mt-3">
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="text-lg leading-6 font-medium text-gray-900">Call Transcript</h3>
+                                <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600">
+                                    <i class="fa-solid fa-xmark text-xl"></i>
+                                </button>
+                            </div>
+                            <div class="mt-2 text-left">
+                                <pre id="transcriptContent"
+                                    class="text-sm text-gray-600 bg-gray-50 p-4 rounded whitespace-pre-wrap font-sans"></pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 7. USER PROFILE -->
+                <div id="section-profile" class="hidden space-y-6 max-w-2xl mx-auto mt-10">
+                    <!-- Loading Spinner (shown first) -->
+                    <div id="profileLoadingSpinner" class="flex items-center justify-center py-32">
+                        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                    </div>
+
+                    <!-- Profile Card (hidden until data loads) -->
+                    <div id="profileCard"
+                        class="hidden bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                        <div class="h-32 bg-gradient-to-r from-blue-500 to-indigo-600"></div>
+                        <div class="relative px-8 pb-8">
+                            <div class="absolute -top-16 left-8">
+                                <img id="profile-avatar" src="https://ui-avatars.com/api/?name=User"
+                                    class="w-32 h-32 rounded-full border-4 border-white shadow-md bg-white object-cover">
+                            </div>
+                            <div class="pt-20">
+                                <h2 id="profile-name" class="text-2xl font-bold text-gray-900">User Name</h2>
+                                <p id="profile-email" class="text-gray-500">user@example.com</p>
+                            </div>
+
+                            <div class="mt-8 border-t border-gray-100 pt-6">
+                                <h3 class="text-sm font-medium text-gray-900 mb-4">Account</h3>
+                                <div class="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                                    <div class="flex items-center gap-3">
+                                        <div
+                                            class="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm text-green-500">
+                                            <i class="fa-brands fa-google"></i>
+                                        </div>
+                                        <div>
+                                            <p class="text-sm font-medium text-gray-900">Google Account</p>
+                                            <p class="text-xs text-green-600">Connected via Supabase</p>
+                                        </div>
+                                    </div>
+                                    <span
+                                        class="px-3 py-1 bg-green-100 text-green-700 text-xs rounded-full font-medium">Active</span>
+                                </div>
+                            </div>
+
+                            <div class="mt-8 flex justify-end">
+                                <button onclick="logout()"
+                                    class="flex items-center gap-2 px-6 py-2.5 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors font-medium">
+                                    <i class="fa-solid fa-right-from-bracket"></i>
+                                    Sign Out
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 6. ANALYTICS (Deleted) -->
+
+            </div>
+
+            <!-- RIGHT: LIVE PREVIEW (Fixed Width) -->
+            <div class="w-96 bg-white border-l border-gray-200 flex flex-col shadow-lg z-20">
+                <div class="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+                    <h3 class="font-semibold text-gray-700 text-sm"><i
+                            class="fa-solid fa-headset mr-2 text-blue-500"></i>Live Simulator</h3>
+                    <div id="statusBadge"
+                        class="px-2 py-0.5 rounded-full bg-gray-200 text-gray-600 text-[10px] font-bold uppercase tracking-wide">
+                        Offline</div>
+                </div>
+
+                <!-- Chat Log -->
+                <div id="chat" class="flex-1 overflow-y-auto p-4 flex flex-col space-y-3 bg-white">
+                    <div class="text-center text-xs text-gray-400 my-4">-- Session Start --</div>
+                    <div class="msg-bubble msg-agent">
+                        👋 Agent ready. Click mic to test.
+                    </div>
+                </div>
+
+                <!-- Chat Controls -->
+                <div class="p-4 bg-white border-t border-gray-100">
+                    <div class="flex items-center space-x-2">
+                        <!-- Mic Button -->
+                        <button id="micBtn" class="mic-btn-modern flex-1">
+                            <div class="mic-icon-wrapper">
+                                <i
+                                    class="fa-solid fa-microphone text-xl relative z-10 transition-transform duration-300"></i>
+                                <div class="pulse-ring"></div>
+                            </div>
+                            <span class="font-bold tracking-wider text-sm">TAP TO SPEAK</span>
+                        </button>
+                    </div>
+                    <div class="text-center mt-2 flex justify-between items-center px-2">
+                        <span id="statusBadge"
+                            class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-[10px] font-bold uppercase tracking-wide">Ready</span>
+
+                        <!-- Simulated Phone Link -->
+                        <button onclick="document.getElementById('simPhoneCtx').classList.toggle('hidden')"
+                            class="text-[9px] text-gray-300 hover:text-gray-500 underline decoration-dashed">Caller
+                            ID</button>
+                    </div>
+
+                    <div id="simPhoneCtx" class="hidden mt-2 w-full border-t border-gray-100 pt-2">
+                        <input type="text" id="simulatedPhone" value="9876543210"
+                            class="w-full text-xs p-1 border rounded text-center bg-gray-50" placeholder="Phone Number">
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Supabase Auth -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        const supabaseUrl = 'https://zucqctoevjgarklljyuc.supabase.co';
+        const supabaseKey = 'sb_publishable_rZjyDpFpB--JOnLvUk2v0Q_toB2ydfO';
+        const _supabase = supabase.createClient(supabaseUrl, supabaseKey);
+    </script>
+
+    <!-- LOGIC -->
+    <script>
+        const API = "/api";
+        let config = {};
+
+
+
+        // --- CALL HISTORY ---
+        async function loadCalls() {
+            const token = getAuthToken();
+            if (!token) return;
+
+            try {
+                const res = await fetch(`${API}/calls`, {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const calls = await res.json();
+                    const tbody = document.getElementById('callsTableBody');
+                    tbody.innerHTML = "";
+
+                    if (calls.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="4" class="px-6 py-4 text-center text-sm text-gray-500">No calls yet.</td></tr>';
+                        return;
+                    }
+
+                    calls.forEach(call => {
+                        const tr = document.createElement('tr');
+                        const statusColor = call.status === 'completed' ? 'green' : (call.status === 'failed' ? 'red' : 'yellow');
+
+                        // Parse Result (handle both string and object)
+                        let analysisText = "";
+                        if (call.analysis_result) {
+                            try {
+                                // Handle if it's already an object (Supabase JSONB) or a string
+                                const parsed = typeof call.analysis_result === 'string'
+                                    ? JSON.parse(call.analysis_result)
+                                    : call.analysis_result;
+
+                                if (parsed.actions && parsed.actions.length > 0) {
+                                    // Show first action summary
+                                    analysisText = `<span class="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-200">✅ Executed: ${parsed.actions[0].service}</span>`;
+                                } else if (parsed.actions && parsed.actions.length === 0) {
+                                    analysisText = `<span class="text-xs text-gray-400">No Rules Matched</span>`;
+                                } else if (parsed.summary) {
+                                    analysisText = `<span class="text-xs text-gray-500">${parsed.summary}</span>`;
+                                } else {
+                                    analysisText = `<span class="text-xs text-gray-400">Analyzed</span>`;
+                                }
+                            } catch (e) {
+                                console.log("Parse error:", e);
+                                analysisText = `<span class="text-xs text-gray-400">${typeof call.analysis_result === 'object' ? 'Analysis Complete' : call.analysis_result}</span>`;
+                            }
+                        } else {
+                            analysisText = `<span class="text-xs text-gray-300">-</span>`;
+                        }
+
+                        tr.innerHTML = `
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${new Date(call.created_at).toLocaleString()}</td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-${statusColor}-100 text-${statusColor}-800">
+                                    ${call.status}
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                ${analysisText}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <button onclick="viewTranscript(${call.id})" class="text-indigo-600 hover:text-indigo-900">View</button>
+                                <div id="transcript-${call.id}" class="hidden">${call.transcript || ''}</div>
+                            </td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                }
+            } catch (e) { console.error("Load Calls Error:", e); }
+        }
+
+        function viewTranscript(id) {
+            const content = document.getElementById(`transcript-${id}`).innerText;
+            document.getElementById('transcriptContent').innerText = content || "No transcript available.";
+            document.getElementById('transcriptModal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('transcriptModal').classList.add('hidden');
+        }
+
+        // --- AUTH & DATA ---
+        // --- AUTH & DATA ---
+        function getAuthToken() {
+            // Check Supabase Token (New)
+            const token = localStorage.getItem("supabase_token");
+            if (!token) {
+                // Check legacy token? No, confusing. Force relogin.
+                window.location.href = "/login";
+                return null;
+            }
+            return token;
+        }
+
+        async function authenticatedFetch(url, options = {}) {
+            const token = getAuthToken();
+            if (!token) return;
+
+            const headers = options.headers || {};
+            headers["Authorization"] = `Bearer ${token}`;
+
+            // For OAuth users, add user info to headers so backend can identify them
+            if (token === "oauth_success_token") {
+                const userId = localStorage.getItem("user_id");
+                const userEmail = localStorage.getItem("user_email");
+                if (userId) headers["X-User-ID"] = userId;
+                if (userEmail) headers["X-User-Email"] = userEmail;
+            }
+
+            if (!headers["Content-Type"] && !(options.body instanceof FormData)) {
+                headers["Content-Type"] = "application/json";
+            }
+
+            // Cache Busting
+            const separator = url.includes('?') ? '&' : '?';
+            const infiniteUrl = `${url}${separator}_t=${new Date().getTime()}`;
+
+            const res = await fetch(infiniteUrl, {
+                ...options,
+                headers,
+                cache: "no-store"
+            });
+
+            if (res.status === 401) {
+                console.warn("Unauthorized or Token Expired");
+                logout();
+            }
+            return res;
+        }
+
+        async function logout() {
+            // Clean Local Storage
+            localStorage.removeItem("supabase_token");
+            localStorage.removeItem("user_email");
+
+            // Supabase Logout (if client lib loaded, but we are in vanilla here so mostly just clear token)
+            // Ideally we call supabase.auth.signOut() if script is present.
+            // For now, redirecting to login is enough, the login page checks session.
+            window.location.href = "/login";
+        }
+
+        // --- NAVIGATION ---
+        function showSection(sectionName) {
+            if (sectionName === 'profile') {
+                document.getElementById('section-config').classList.add('hidden');
+                document.getElementById('section-profile').classList.remove('hidden');
+                document.getElementById('page-title').textContent = 'User Profile';
+                loadProfileData();
+            }
+        }
+
+        async function loadProfileData() {
+            console.log('[PROFILE] Starting to load profile data...');
+            const spinner = document.getElementById('profileLoadingSpinner');
+            if (spinner) spinner.classList.remove('hidden');
+
+            try {
+                console.log('[PROFILE] Calling API:', `${API}/user/profile`);
+                const res = await authenticatedFetch(`${API}/user/profile`);
+                console.log('[PROFILE] Response received:', res);
+
+                if (res && res.ok) {
+                    const data = await res.json();
+                    console.log('[PROFILE] Data received:', data);
+
+                    // Access nested metadata fields
+                    const fullName = data.metadata?.full_name || data.full_name || 'User';
+                    const avatarUrl = data.metadata?.avatar_url || data.avatar_url;
+
+                    document.getElementById('profile-name').textContent = fullName;
+                    document.getElementById('profile-email').textContent = data.email || '';
+                    if (avatarUrl) document.getElementById('profile-avatar').src = avatarUrl;
+                } else {
+                    console.error('[PROFILE] API call failed:', res ? res.status : 'No response');
+                }
+            } catch (e) {
+                console.error('[PROFILE] Error:', e);
+            } finally {
+                console.log('[PROFILE] Hiding spinner and showing card');
+                if (spinner) spinner.classList.add('hidden');
+                const card = document.getElementById('profileCard');
+                if (card) card.classList.remove('hidden');
+            }
+        }
+
+        async function loadData() {
+            try {
+                // Config
+                const res = await authenticatedFetch(`${API}/config`);
+                if (res && res.ok) {
+                    config = await res.json();
+                    document.getElementById('business_name').value = config.business_name || "";
+                    document.getElementById('voice_id').value = config.voice_id || ""; // Fallback handled in logic
+                    // If voice_id is standard, select it, else 'other'
+                    const vSelect = document.getElementById('voice_id_select');
+                    if (config.voice_id && config.voice_id === "3b554273-4299-48b9-9aaf-eefd438e3941") {
+                        vSelect.value = "3b554273-4299-48b9-9aaf-eefd438e3941";
+                    } else {
+                        vSelect.value = "other"; // or just leave as is
+                    }
+
+                    document.getElementById('system_instruction').value = (config.system_instruction || "");
+                    if (document.getElementById('system-prompt')) document.getElementById('system-prompt').value = (config.outbound_system_instruction || "");
+                    if (document.getElementById('system-prompt')) document.getElementById('system-prompt').value = config.outbound_system_instruction || "";
+
+                    // Hide system prompt loading spinner
+                    const promptSpinner = document.getElementById('systemPromptLoadingSpinner');
+                    if (promptSpinner) promptSpinner.style.display = 'none';
+
+                    // Restore Language Checkboxes
+                    if (config.supported_languages && Array.isArray(config.supported_languages)) {
+                        document.querySelectorAll('.language-checkbox').forEach(cb => {
+                            cb.checked = config.supported_languages.some(lang => lang.toLowerCase() === cb.value.toLowerCase());
+                        });
+                        document.querySelectorAll('.language-checkbox').forEach(cb => {
+                            cb.checked = config.supported_languages.some(lang => lang.toLowerCase() === cb.value.toLowerCase());
+                        });
+                    }
+
+
+                    // Render Rules
+                    renderRules(config.automation_rules);
+
+                    // Restore Calendar Toggle State
+                    const calendarToggle = document.getElementById('enableCalendarToggle');
+                    if (calendarToggle) {
+                        calendarToggle.checked = config.enable_calendar || false;
+                    }
+
+
+                    // TOGGLE GOOGLE DEPENDENT SECTIONS
+                    const googleSection = document.getElementById('google-dependent-settings');
+                    const googleStatusLink = document.querySelector('#google-status a');
+
+                    // Always show Google options since we force Google Login
+                    if (googleSection) googleSection.classList.remove('hidden');
+
+                    if (googleStatusLink) {
+                        googleStatusLink.innerHTML = '<span class="text-green-600 font-medium"><i class="fa-solid fa-check-circle"></i> Connected</span>';
+                        googleStatusLink.classList.remove('bg-white', 'border-gray-300', 'text-gray-700', 'hover:bg-gray-50');
+                        googleStatusLink.classList.add('bg-green-50', 'border-green-200');
+                        googleStatusLink.href = "javascript:void(0)";
+                        googleStatusLink.onclick = null;
+                    }
+                }
+
+                // Inventory Preview
+                // Inventory is public-ish but let's be safe
+                const inv = await fetch(`${API}/inventory`);
+                document.getElementById('csvPreview').innerText = await inv.text();
+
+                // Leads (Table removed - commenting out)
+                // loadLeads();
+
+                // Hide full-page loader once everything is loaded
+                const loader = document.getElementById('fullPageLoader');
+                if (loader) {
+                    loader.style.display = 'none';
+                }
+            } catch (e) {
+                console.error(e);
+                alert("LOAD ERROR: " + e.message);
+
+                // Hide loader even on error
+                const loader = document.getElementById('fullPageLoader');
+                if (loader) loader.style.display = 'none';
+            }
+        }
+
+        // --- PROMPT GENERATION / REFINEMENT (LEFT PANEL) ---
+        function toggleGenPanel() {
+            const panel = document.getElementById('genPanel');
+            panel.classList.toggle('hidden');
+        }
+
+        async function generatePrompt() {
+            const goal = document.getElementById('promptGoal').value;
+            if (!goal) return alert("Please describe your goal first.");
+
+            const btn = document.getElementById('genBtn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
+            btn.disabled = true;
+
+            try {
+                // Refinement Context (Send current prompt too)
+                const current = document.getElementById('system_instruction').value;
+                const body = { goal: goal, current_prompt: current };
+
+                const res = await authenticatedFetch(`${API}/generate_prompt`, {
+                    method: "POST",
+                    body: JSON.stringify(body)
+                });
+                if (res && res.ok) {
+                    const data = await res.json();
+                    if (data.status === "success") {
+                        document.getElementById('generatedPromptPreview').value = data.prompt;
+                        document.getElementById('promptPreviewArea').classList.remove('hidden');
+                    } else {
+                        alert("Error: " + data.message);
+                    }
+                }
+            } catch (e) {
+                alert("Generation Failed: " + e);
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        async function acceptPrompt() {
+            const newPrompt = document.getElementById('generatedPromptPreview').value;
+            document.getElementById('system_instruction').value = newPrompt;
+            // Hide Panel to reset flow
+            toggleGenPanel();
+
+            // Highlight
+            const box = document.getElementById('system_instruction');
+            box.style.border = "2px solid #10B981"; // Green
+            setTimeout(() => box.style.border = "", 2000);
+        }
+
+        // ============================================
+        // TWILIO SUBACCOUNT STATUS MANAGEMENT
+        // ============================================
+
+        async function loadTwilioStatus() {
+            console.log('[TWILIO] Loading subaccount status...');
+
+            // Show loading state
+            document.getElementById('twilio-loading').classList.remove('hidden');
+            document.getElementById('twilio-loaded').classList.add('hidden');
+            document.getElementById('twilio-not-provisioned').classList.add('hidden');
+            document.getElementById('twilio-error').classList.add('hidden');
+
+            try {
+                const response = await authenticatedFetch(`${API}/twilio/status`);
+                const data = await response.json();
+
+                console.log('[TWILIO] Status response:', data);
+
+                // Hide loading
+                document.getElementById('twilio-loading').classList.add('hidden');
+
+                if (data.status === 'not_provisioned') {
+                    // Show not provisioned state
+                    document.getElementById('twilio-not-provisioned').classList.remove('hidden');
+                } else {
+                    // Show loaded state with data
+                    document.getElementById('twilio-loaded').classList.remove('hidden');
+
+                    // Update status badge
+                    const badge = document.getElementById('twilio_status_badge');
+                    badge.textContent = data.status.charAt(0).toUpperCase() + data.status.slice(1);
+
+                    // Color code status
+                    badge.className = 'px-3 py-1 text-xs font-semibold rounded-full';
+                    if (data.status === 'active') {
+                        badge.classList.add('bg-green-100', 'text-green-800');
+                    } else if (data.status === 'suspended') {
+                        badge.classList.add('bg-yellow-100', 'text-yellow-800');
+                    } else {
+                        badge.classList.add('bg-gray-100', 'text-gray-800');
+                    }
+
+                    // Update details
+                    document.getElementById('twilio_sid').textContent = data.subaccount_sid || 'N/A';
+                    document.getElementById('twilio_friendly_name').textContent = data.friendly_name || 'N/A';
+
+                    if (data.created_at) {
+                        const created = new Date(data.created_at);
+                        document.getElementById('twilio_created').textContent = created.toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric'
+                        });
+                    } else {
+                        document.getElementById('twilio_created').textContent = '--';
+                    }
+                }
+
+            } catch (error) {
+                console.error('[TWILIO] Error loading status:', error);
+
+                // Hide loading
+                document.getElementById('twilio-loading').classList.add('hidden');
+
+                // Show error state
+                document.getElementById('twilio-error').classList.remove('hidden');
+                document.getElementById('twilio_error_message').textContent = error.message || 'Failed to load Twilio status';
+            }
+        }
+
+        async function provisionTwilioNow() {
+            console.log('[TWILIO] Triggering manual provisioning...');
+
+            try {
+                console.log('[TWILIO] Calling API endpoint:', `${API}/auth/provision-twilio`);
+
+                const response = await authenticatedFetch(`${API}/auth/provision-twilio`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: null }) // Backend uses authenticated user from JWT
+                });
+
+                console.log('[TWILIO] Response status:', response.status);
+                console.log('[TWILIO] Response OK:', response.ok);
+
+                // Check if response is OK before parsing JSON
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('[TWILIO] Error response body:', errorText);
+                    try {
+                        const errorData = JSON.parse(errorText);
+                        throw new Error(errorData.detail || errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+                    } catch (parseError) {
+                        throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`);
+                    }
+                }
+
+                const data = await response.json();
+                console.log('[TWILIO] Provisioning response:', data);
+
+                if (data.status === 'success' || data.status === 'exists') {
+                    alert(`✅ Twilio Subaccount ${data.status === 'exists' ? 'already exists' : 'provisioned successfully'}!\nSID: ${data.subaccount_sid}`);
+
+                    // Reload status to display the subaccount
+                    loadTwilioStatus();
+                } else {
+                    throw new Error(data.detail || data.message || 'Unknown error');
+                }
+
+            } catch (error) {
+                console.error('[TWILIO] Provisioning error:', error);
+                console.error('[TWILIO] Error type:', typeof error);
+                console.error('[TWILIO] Error object:', error);
+
+                // Extract error message properly
+                let errorMsg = 'Unknown error occurred';
+                if (error instanceof Error) {
+                    errorMsg = error.message;
+                } else if (typeof error === 'string') {
+                    errorMsg = error;
+                } else if (error && error.detail) {
+                    errorMsg = error.detail;
+                } else if (error && error.message) {
+                    errorMsg = error.message;
+                }
+
+                alert(`❌ Failed to provision Twilio subaccount:\n${errorMsg}`);
+            }
+        }
+
+
+
+        function discardPrompt() {
+            // Just hide the preview
+            document.getElementById('promptPreviewArea').classList.add('hidden');
+            // keep goal input visible so they can improve it
+        }
+
+        async function saveAndReload() {
+            const btn = document.querySelector('button[onclick="saveAndReload()"]');
+            if (btn) btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Saving...';
+
+            try {
+                // Gather Languages
+                const selectedLangs = Array.from(document.querySelectorAll('.language-checkbox:checked')).map(cb => cb.value);
+
+                // DEBUG: Confirm what is being saved
+                console.log("Saving Languages:", selectedLangs);
+
+                const newConfig = {
+                    ...config,
+                    business_name: document.getElementById('business_name').value,
+                    voice_id: document.getElementById('voice_id').value || document.getElementById('voice_id_select').value,
+                    system_instruction: document.getElementById('system_instruction').value,
+                    supported_languages: selectedLangs,
+                    // Fallback to config or the single configured Cartesia key
+                    cartesia_api_key: config.cartesia_api_key,
+                };
+
+                const res = await authenticatedFetch(`${API}/config`, {
+                    method: "POST",
+                    body: JSON.stringify(newConfig)
+                });
+
+                if (res && res.ok) {
+                    if (btn) {
+                        btn.innerHTML = '<i class="fa-solid fa-check mr-2"></i> Saved';
+                        setTimeout(() => btn.innerHTML = '<i class="fa-solid fa-save mr-2"></i> Save & Deploy', 2000);
+                    }
+
+                    // Reload Agent Logic
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({ type: "config", key: "", phone: document.getElementById('simulatedPhone').value }));
+                        addMessage("System", "Configuration Reloaded. New persona active.");
+                    }
+                } else {
+                    throw new Error("API Returned Error (Non-OK)");
+                }
+            } catch (e) {
+                console.error("Save Error:", e);
+                alert("Failed to save: " + e.message);
+                if (btn) {
+                    btn.innerHTML = '<i class="fa-solid fa-triangle-exclamation mr-2"></i> Error';
+                    setTimeout(() => btn.innerHTML = '<i class="fa-solid fa-save mr-2"></i> Save & Deploy', 2000);
+                }
+            }
+        }
+
+        async function loadLeads() {
+            const res = await authenticatedFetch(`${API}/leads`);
+            if (res && res.ok) {
+                const leads = await res.json();
+                const tbody = document.getElementById('leadsTableBody');
+                tbody.innerHTML = "";
+                leads.forEach((l, index) => {
+                    tbody.innerHTML += `
+                    <tr class="hover:bg-gray-50 transition">
+                        <td class="px-6 py-4 whitespace-nowrap text-gray-500">${l.Timestamp || l[0]}</td>
+                        <td class="px-6 py-4 whitespace-nowrap font-medium text-gray-900">${l.Name || l[1]}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-gray-500">${l.Phone || l[2]}</td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">${l.Intent || l[3]}</span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <button onclick="deleteLead(${index})" class="text-red-600 hover:text-red-900 transition" title="Delete Lead">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>`;
+                });
+            }
+        }
+
+        async function deleteLead(index) {
+            if (!confirm("Are you sure you want to delete this lead?")) return;
+            const res = await authenticatedFetch(`${API}/leads/${index}`, { method: "DELETE" });
+            if (res && res.ok) {
+                const data = await res.json();
+                if (data.status === "success") {
+                    loadLeads(); // Refresh
+                } else {
+                    alert("Failed to delete lead: " + data.message);
+                }
+            }
+        }
+
+        async function uploadInventory() {
+            const file = document.getElementById('inventoryFile').files[0];
+            if (!file) return alert("Please select a .csv file first");
+            const fd = new FormData(); fd.append("file", file);
+            fd.append("category_mapping", JSON.stringify({
+                "product": "product",
+                "policy": "policy",
+                "process": "process",
+                "faq": "faq"
+            }));
+
+            const res = await authenticatedFetch(`${API}/knowledge/import-csv`, {
+                method: "POST",
+                body: fd,
+                headers: {}
+            });
+
+            if (res && res.ok) {
+                const result = await res.json();
+                alert(`Upload Complete! ${result.rows_imported} items imported. ${result.errors.length > 0 ? `Errors: ${result.errors.length}` : ''}`);
+            } else {
+                // Show actual error from server if available
+                let errorMessage = "Upload failed. Please check your CSV format.";
+                try {
+                    const errorData = await res.json();
+                    if (errorData.message) {
+                        errorMessage = `Upload failed: ${errorData.message}`;
+                    }
+                } catch (e) {
+                    console.error("Error parsing server response:", e);
+                }
+                alert(errorMessage);
+            }
+        }
+
+        document.getElementById('inventoryFile').onchange = async (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                document.getElementById('fileName').innerText = file.name;
+
+                // Show preview immediately when file is selected
+                try {
+                    const csvText = await file.text();
+                    const preview = csvText.split('\n').slice(0, 10).join('\n'); // Show first 10 lines
+                    document.getElementById('csvPreview').innerText = preview + (csvText.split('\n').length > 10 ? '\n... (showing first 10 lines)' : '');
+                } catch (error) {
+                    document.getElementById('csvPreview').innerText = 'Error reading file';
+                }
+            }
+        };
+
+        // --- AGENT INTERFACE (WebSockets) ---
+        let ws, mediaRecorder, isRecording;
+        let audioContext, nextStartTime = 0;
+
+        function parseJwt(token) {
+            try { return JSON.parse(atob(token.split('.')[1])); } catch (e) { return null; }
+        }
+
+        async function connectAgent() {
+            // 1. Resolve User ID from OAuth flow
+            let userId = localStorage.getItem("user_id");
+            const token = getAuthToken();
+            let userEmail = localStorage.getItem("user_email");
+
+            console.log("[Client] User info from localStorage:", { userId, userEmail, token });
+
+            // For OAuth users, use the stored user info
+            if (token === "oauth_success_token") {
+                // Use the actual user info from localStorage (set during OAuth)
+                userId = localStorage.getItem("user_id") || userId;
+                userEmail = localStorage.getItem("user_email") || userEmail;
+                console.log("[Client] Using OAuth user info:", userId, userEmail);
+            } else {
+                // Try Supabase auth for real users
+                try {
+                    if (typeof _supabase !== 'undefined') {
+                        const { data } = await _supabase.auth.getUser();
+                        if (data?.user) {
+                            userId = data.user.id;
+                            userEmail = data.user.email;
+                            console.log("[Client] Supabase User Resolved:", userId, userEmail);
+                        }
+                    }
+                } catch (e) { console.warn("Supabase API Check Failed:", e); }
+            }
+
+            // 2. Connect
+            const protocol = window.location.protocol === "https:" ? "wss://" : "ws://";
+            ws = new WebSocket(`${protocol}${window.location.host}/ws`);
+
+            ws.onopen = () => {
+                document.getElementById('statusBadge').className = "px-2 py-0.5 rounded-full bg-green-100 text-green-800 text-[10px] font-bold uppercase tracking-wide";
+                document.getElementById('statusBadge').innerText = "ONLINE";
+
+                const configMsg = {
+                    type: "config",
+                    key: "",
+                    token: token,
+                    user_id: userId,
+                    user_email: userEmail,
+                    phone: document.getElementById('simulatedPhone')?.value
+                };
+
+                ws.send(JSON.stringify(configMsg));
+                console.log("[WS] Sent Config:", configMsg);
+            };
+
+            ws.onmessage = async (event) => {
+                if (typeof event.data === "string") {
+                    const msg = JSON.parse(event.data);
+                    const btn = document.getElementById('micBtn');
+
+                    // Store session ID for Twilio calls
+                    if (msg.session_id) {
+                        localStorage.setItem('twilio_session_id', msg.session_id);
+                        console.log("[WS] Stored session ID for Twilio:", msg.session_id);
+                    }
+
+                    if (msg.status === "processing") {
+                        btn.className = "mic-btn-modern processing";
+                        document.getElementById('statusBadge').innerText = "THINKING...";
+                        document.getElementById('statusBadge').className = "px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[10px] font-bold uppercase tracking-wide";
+                    }
+                    else if (msg.status === "ready") {
+                        btn.className = "mic-btn-modern";
+                        document.getElementById('statusBadge').innerText = "READY";
+                        document.getElementById('statusBadge').className = "px-2 py-0.5 rounded-full bg-green-100 text-green-800 text-[10px] font-bold uppercase tracking-wide";
+                    }
+                    else if (msg.type === "user_text") {
+                        addMessage("User", msg.payload);
+                    }
+                    else if (msg.type === "agent_text") {
+                        // Calculate Latency
+                        let latMsg = "";
+                        if (latencyStart > 0) {
+                            const elapsed = Date.now() - latencyStart;
+                            latMsg = ` <span class="text-[9px] text-gray-400 font-mono ml-2">(${elapsed}ms)</span>`;
+                            latencyStart = 0;
+                        }
+                        addMessage("Agent", msg.payload + latMsg, true);
+                    }
+                    else if (msg.type === "text") {
+                        addMessage("Agent", msg.payload);
+                    }
+                } else {
+                    handleAudio(event.data);
+                }
+            };
+
+            ws.onclose = () => {
+                document.getElementById('statusBadge').className = "px-2 py-0.5 rounded-full bg-red-100 text-red-800 text-[10px] font-bold uppercase tracking-wide";
+                document.getElementById('statusBadge').innerText = "DISCONNECTED";
+                setTimeout(connectAgent, 3000);
+            };
+        }
+
+        function addMessage(role, text, isHtml = false) {
+            const chat = document.getElementById('chat');
+            const div = document.createElement('div');
+            div.className = `msg-bubble ${role === 'User' ? 'msg-user' : 'msg-agent'}`;
+            // Handle System Messages
+            if (role === 'System') {
+                div.className = "text-center text-xs text-gray-400 my-2 italic";
+                div.innerText = text;
+            } else {
+                if (isHtml) div.innerHTML = text;
+                else div.innerText = text;
+            }
+            chat.appendChild(div);
+            chat.scrollTop = chat.scrollHeight;
+        }
+
+        // --- WEB SPEECH API (NATIVE STT) ---
+        let recognition;
+        let isListening = false;
+        let latencyStart = 0;
+
+        function getSelectedLanguageCode() {
+            // Priority: Explicit Dropdown
+            const dropdown = document.getElementById('micLang');
+            if (dropdown) return dropdown.value;
+            return 'en-IN';
+        }
+
+        function setupRecognition() {
+            if (!('webkitSpeechRecognition' in window)) {
+                alert("Web Speech API not supported in this browser. Use Chrome/Edge.");
+                return;
+            }
+            recognition = new webkitSpeechRecognition();
+            recognition.continuous = true; // Keep listening
+            recognition.interimResults = true; // Real-time results
+
+            recognition.onstart = function () {
+                isListening = true;
+                document.getElementById('micBtn').className = "mic-btn-modern listening";
+                addMessage("System", "Listening (" + recognition.lang + ")...");
+            };
+
+            recognition.onerror = function (event) {
+                console.error("Speech Error", event.error);
+                if (event.error === 'not-allowed') alert("Mic Access Denied");
+                document.getElementById('micBtn').className = "mic-btn-modern";
+                isListening = false;
+            };
+
+            recognition.onend = function () {
+                isListening = false;
+                document.getElementById('micBtn').className = "mic-btn-modern";
+            };
+
+            // --- TURBO VAD ---
+            // The browser waits too long (1-2s) for "Final".
+            // We manually detect if user stopped speaking regarding Interim results.
+            let silenceTimer = null;
+
+            recognition.onresult = function (event) {
+                let finalTranscript = '';
+                let interimTranscript = '';
+
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    if (event.results[i].isFinal) {
+                        finalTranscript += event.results[i][0].transcript;
+                    } else {
+                        interimTranscript += event.results[i][0].transcript;
+                    }
+                }
+
+                if (finalTranscript) {
+                    sendToAgent(finalTranscript);
+                    clearTimeout(silenceTimer);
+                }
+                else if (interimTranscript.length > 2) {
+                    // Visual Feedback for Interim
+                    document.getElementById('statusBadge').innerText = "LISTENING...";
+                    document.getElementById('statusBadge').className = "px-2 py-0.5 rounded-full bg-red-100 text-red-800 text-[10px] font-bold uppercase tracking-wide";
+
+                    // Turbo Logic: If user pauses for 500ms, assume done.
+                    clearTimeout(silenceTimer);
+                    silenceTimer = setTimeout(() => {
+                        console.log("Turbo VAD Triggered!");
+                        recognition.stop();
+                    }, 500);
+                }
+            };
+
+            function sendToAgent(text) {
+                if (!text || text.trim().length < 1) return;
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    console.log("Sending Final: ", text);
+                    addMessage("User", text);
+
+                    // Start Latency Timer
+                    latencyStart = Date.now();
+                    latencyLogged = false;
+                    document.getElementById('statusBadge').innerText = "THINKING...";
+                    document.getElementById('statusBadge').className = "px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 text-[10px] font-bold uppercase tracking-wide";
+
+                    ws.send(JSON.stringify({ type: "text_input", text: text }));
+                }
+            }
+        }
+
+        // --- HYBRID AUDIO: WEBSPEECH (Native) vs MEDIARECORDER (Server) ---
+
+        async function setupMediaRecorder() {
+            try {
+                // Simplify MIME Type (Chrome/Edge Standard)
+                const options = { mimeType: 'audio/webm' };
+
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream, options);
+
+                // --- VAD (Silence Detection) ---
+                // REUSE GLOBAL audioContext to prevent hitting 6-context limit
+                if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                if (audioContext.state === 'suspended') await audioContext.resume();
+
+                const source = audioContext.createMediaStreamSource(stream);
+                const analyser = audioContext.createAnalyser();
+                analyser.fftSize = 512;
+                source.connect(analyser);
+
+                const dataArray = new Uint8Array(analyser.frequencyBinCount);
+                let silenceStart = Date.now();
+                let hasSpoken = false;
+                let vadInterval;
+
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0 && ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(event.data);
+                    }
+                };
+
+                mediaRecorder.onstart = () => {
+                    isListening = true;
+                    hasSpoken = false;
+                    silenceStart = Date.now();
+                    document.getElementById('micBtn').className = "mic-btn-modern listening";
+                    document.getElementById('statusBadge').innerText = "LISTENING...";
+                    document.getElementById('statusBadge').className = "px-2 py-0.5 rounded-full bg-red-600 text-white text-[10px] font-bold uppercase tracking-wide";
+                    addMessage("System", "Listening...");
+
+                    // Start VAD Loop
+                    clearInterval(vadInterval);
+                    vadInterval = setInterval(() => {
+                        analyser.getByteFrequencyData(dataArray);
+
+                        // Calculate Volume
+                        let sum = 0;
+                        for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+                        const average = sum / dataArray.length;
+
+                        // Thresholds
+                        if (average > 10) { // Speech Detected
+                            silenceStart = Date.now();
+                            hasSpoken = true;
+                        } else {
+                            // Silence
+                            const silenceDuration = Date.now() - silenceStart;
+                            // User requested 0.150s (150ms)
+                            if (hasSpoken && silenceDuration > 150) {
+                                console.log("Auto-Stop Triggered (150ms Silence)");
+                                mediaRecorder.stop();
+                                clearInterval(vadInterval);
+                            }
+                        }
+                    }, 50); // Check every 50ms
+                };
+
+                mediaRecorder.onstop = () => {
+                    isListening = false;
+                    clearInterval(vadInterval);
+                    latencyStart = Date.now(); // Start Latency Timer
+                    document.getElementById('micBtn').className = "mic-btn-modern";
+                    document.getElementById('statusBadge').innerText = "PROCESSING...";
+                    document.getElementById('statusBadge').className = "px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 text-[10px] font-bold uppercase tracking-wide";
+
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({ type: "audio_end" }));
+                    }
+                };
+
+            } catch (err) {
+                console.error("Mic Error:", err);
+                alert("Microphone Access Denied: " + err);
+            }
+        }
+
+        async function toggleMic() {
+            // Unlock Audio Engine
+            if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioContext.state === 'suspended') audioContext.resume();
+
+            // ALWAYS AUTO (Server-Side Whisper)
+            if (isListening) {
+                // STOP
+                if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
+                isListening = false;
+            } else {
+                // START
+                if (!mediaRecorder) await setupMediaRecorder();
+                if (mediaRecorder.state === 'inactive') {
+                    mediaRecorder.start();
+                    document.getElementById('statusBadge').innerText = "LISTENING (Auto-Detect)...";
+                    document.getElementById('statusBadge').className = "px-2 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-bold uppercase tracking-wide";
+                }
+            }
+        }
+
+        document.getElementById('micBtn').onclick = toggleMic;
+
+        async function handleAudio(blob) {
+            console.log(`[AUDIO] Received Blob: ${blob.size} bytes`);
+
+            if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioContext.state === 'suspended') {
+                console.log("[AUDIO] Resuming Context...");
+                await audioContext.resume();
+            }
+
+            const arrayBuffer = await blob.arrayBuffer();
+            const int16 = new Int16Array(arrayBuffer);
+            console.log(`[AUDIO] Int16 Samples: ${int16.length}`);
+
+            if (int16.length > 0) {
+                console.log(`[AUDIO] First 5 Samples:`, int16.slice(0, 5));
+            }
+
+            const float32 = new Float32Array(int16.length);
+            for (let i = 0; i < int16.length; i++) {
+                // Amplify x5 (Software Gain)
+                float32[i] = (int16[i] / 32768) * 5.0;
+            }
+
+            const buffer = audioContext.createBuffer(1, float32.length, 24000);
+            // Server sends 24000 Hz audio
+            buffer.copyToChannel(float32, 0);
+
+            const source = audioContext.createBufferSource();
+            source.buffer = buffer;
+            source.connect(audioContext.destination);
+
+            const now = audioContext.currentTime;
+            // Gapless Logic
+            if (nextStartTime < now) nextStartTime = now + 0.05;
+
+            console.log(`[AUDIO] Scheduling at: ${nextStartTime} (Now: ${now})`);
+            source.start(nextStartTime);
+            nextStartTime += buffer.duration;
+
+            // Measure Latency (First Byte)
+            if (latencyStart > 0 && !latencyLogged) {
+                const diff = Date.now() - latencyStart;
+                latencyLogged = true;
+                const perfMsg = `${diff}ms`;
+                document.getElementById('statusBadge').innerText = "PLAYING (" + perfMsg + ")";
+                document.getElementById('statusBadge').className = "px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[10px] font-bold uppercase tracking-wide";
+                addMessage("System", "Latency: " + perfMsg);
+                console.log("TTS Latency: " + perfMsg);
+            }
+
+            document.getElementById('micBtn').className = "mic-btn-modern speaking";
+
+            // ECHO CANCELLATION: Pause Mic while Agent is speaking
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                console.log("Pausing Mic for TTS...");
+                mediaRecorder.pause();
+                // Also pause VAD visualization if needed, but not strictly necessary if pause() stops data
+            }
+
+            // Only reset UI if we are actually done playing everything
+            // Use a timeout to avoid rapid flickering between chunks
+            source.onended = () => {
+                if (audioContext.currentTime >= nextStartTime - 0.2) { // 200ms grace
+                    document.getElementById('micBtn').className = "mic-btn-modern";
+
+                    // RESUME MIC
+                    if (mediaRecorder && mediaRecorder.state === 'paused' && isRecording) {
+                        console.log("Resuming Mic...");
+                        mediaRecorder.resume();
+                    }
+                }
+            };
+        }
+
+        // --- NAVIGATION ---
+        function showSection(id) {
+            ['config', 'knowledge', 'leads', 'history', 'integrations', 'outbound', 'profile'].forEach(s => {
+                document.getElementById('section-' + s)?.classList.add('hidden');
+                document.getElementById('nav-' + s)?.classList.remove('active', 'bg-blue-50', 'text-blue-700', 'border-r-2', 'border-blue-600');
+            });
+
+            const section = document.getElementById('section-' + id);
+            if (section) section.classList.remove('hidden');
+
+            const nav = document.getElementById('nav-' + id);
+            if (nav) nav.classList.add('active', 'bg-blue-50', 'text-blue-700', 'border-r-2', 'border-blue-600');
+
+            // Validate Title
+            const titles = {
+                'config': 'Agent Configuration',
+                'knowledge': 'Knowledge Base (RAG)',
+                'leads': 'Customer Leads',
+                'history': 'Call History',
+                'integrations': 'Integrations',
+                'outbound': 'Outbound Calls',
+                'profile': 'User Profile'
+            };
+            document.getElementById('page-title').innerText = titles[id] || 'Dashboard';
+
+            // Load Twilio status when viewing integrations
+            if (id === 'integrations') {
+                loadTwilioStatus();
+            }
+            // Load outbound calls data
+            if (id === 'outbound') {
+                loadTwilioNumbers();
+                loadCallHistory();
+                loadSettings(); // Load default system instruction
+            }
+            if (id === 'profile') {
+                loadProfile();
+            }
+        }
+
+        async function loadProfile() {
+            const spinner = document.getElementById('profileLoadingSpinner');
+            const card = document.getElementById('profileCard');
+
+            try {
+                // Fetch Profile from Backend (Guaranteed to work if token is valid)
+                const res = await authenticatedFetch('/api/user/profile');
+                if (res && res.ok) {
+                    const data = await res.json();
+                    console.log("Profile API Data:", data);
+
+                    const meta = data.metadata || {};
+                    const name = meta.full_name || meta.name || "User";
+                    const email = data.email || "user@example.com";
+                    const avatar = meta.avatar_url || meta.picture || `https://ui-avatars.com/api/?name=${name}`;
+
+                    document.getElementById('profile-name').innerText = name;
+                    document.getElementById('profile-email').innerText = email;
+                    document.getElementById('profile-avatar').src = avatar;
+                }
+            } catch (e) {
+                console.error("Error loading profile from API:", e);
+            } finally {
+                // Hide spinner, show card
+                if (spinner) spinner.classList.add('hidden');
+                if (card) card.classList.remove('hidden');
+            }
+        }
+
+
+        function toggleServiceConfig() {
+            const val = document.getElementById('serviceSelector').value;
+
+            document.getElementById('sheet-config-container').classList.add('hidden');
+            document.getElementById('calendar-config-container').classList.add('hidden');
+
+            if (val === 'sheets') {
+                document.getElementById('sheet-config-container').classList.remove('hidden');
+            } else if (val === 'calendar') {
+                document.getElementById('calendar-config-container').classList.remove('hidden');
+            }
+        }
+
+        // --- GOOGLE INTEGRATION LOGIC ---
+        async function checkGoogleAuth() {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('google_connected') === 'true') {
+                window.history.replaceState({}, document.title, window.location.pathname);
+                // Force reload of Config to update UI immediately
+                setTimeout(loadData, 500);
+            }
+            // Always load sheets/calendars to check status
+            loadSheets();
+            loadCalendars();
+        }
+
+        async function loadSheets() {
+            const token = localStorage.getItem("auth_token");
+            if (!token) return;
+
+            try {
+                const res = await fetch(`/api/sheets`, { headers: { "Authorization": `Bearer ${token}` } });
+                if (res.ok) {
+                    const files = await res.json();
+
+                    // Error handling shouldn't overwrite Global Status anymore
+                    if (files.error) {
+                        console.warn("Sheets API Error:", files.error);
+                        return;
+                    }
+
+                    // Populate Dropdown
+                    const select = document.getElementById('sheetDropdown');
+                    if (select) {
+                        select.innerHTML = "";
+                        files.forEach(f => {
+                            const opt = document.createElement('option');
+                            opt.value = f.id;
+                            opt.innerText = f.name;
+                            select.appendChild(opt);
+                        });
+                    }
+                }
+            } catch (e) { console.log("Error loading sheets:", e); }
+        }
+
+        async function saveSheetSelection() {
+            const select = document.getElementById("sheetDropdown");
+            const sheetId = select.value;
+            const sheetName = select.options[select.selectedIndex].text;
+            const token = localStorage.getItem("supabase_token");
+
+            if (!sheetId) return alert("Select a sheet first");
+
+            try {
+                const res = await fetch('/api/sheets/select', {
+                    method: 'POST',
+                    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+                    body: JSON.stringify({ sheet_id: sheetId, sheet_name: sheetName })
+                });
+                if (res.ok) {
+                    alert("Sheet Linked Successfully!");
+                    document.getElementById('sheetNameDisplay').innerText = sheetName;
+                    document.getElementById('connectedSheetInfo').classList.remove('hidden');
+                }
+            } catch (e) { alert("Error saving sheet selection"); }
+        }
+
+        async function loadCalendars() {
+            const token = localStorage.getItem("supabase_token");
+            if (!token) return;
+
+            try {
+                const res = await fetch(`/api/calendars`, { headers: { "Authorization": `Bearer ${token}` } });
+                if (res.ok) {
+                    const items = await res.json();
+                    if (items.error) return;
+
+                    const select = document.getElementById('calendarDropdown');
+                    if (select) {
+                        select.innerHTML = "";
+                        items.forEach(c => {
+                            const opt = document.createElement('option');
+                            opt.value = c.id;
+                            opt.innerText = c.summary;
+                            select.appendChild(opt);
+                        });
+                    }
+                }
+            } catch (e) { console.log("Error loading calendars:", e); }
+        }
+
+        async function saveCalendarSetting(suffix = "") {
+            const isEnabled = document.getElementById('enableCalendarToggle' + suffix).checked;
+
+            try {
+                const res = await authenticatedFetch('/api/save_calendar', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enable_calendar: isEnabled })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    console.log('[Calendar] Setting saved:', data.enable_calendar);
+
+                    // Sync BOTH toggles
+                    const newState = data.enable_calendar;
+                    if (document.getElementById('enableCalendarToggle')) document.getElementById('enableCalendarToggle').checked = newState;
+                    if (document.getElementById('enableCalendarToggle_outbound')) document.getElementById('enableCalendarToggle_outbound').checked = newState;
+
+                    // Visual feedback
+                    const toggle = document.getElementById('enableCalendarToggle' + suffix);
+                    if (toggle) {
+                        const label = toggle.closest('label');
+                        label.classList.add('ring-2', 'ring-green-400');
+                        setTimeout(() => {
+                            label.classList.remove('ring-2', 'ring-green-400');
+                        }, 500);
+                    }
+                } else {
+                    console.error('[Calendar] Save failed');
+                    alert('Failed to save calendar setting');
+                    // Revert
+                    document.getElementById('enableCalendarToggle' + suffix).checked = !isEnabled;
+                }
+            } catch (e) {
+                console.error('[Calendar] Error:', e);
+                alert('Error saving calendar setting');
+                // Revert
+                document.getElementById('enableCalendarToggle' + suffix).checked = !isEnabled;
+            }
+        }
+
+        async function disconnectGoogle() {
+            if (!confirm("Disconnect Google Account? Automations will pause.")) return;
+            try {
+                const res = await authenticatedFetch("/auth/google/logout", { method: "POST" });
+                if (res.ok) {
+                    // Update UI immediately
+                    loadData();
+                    // Or force reload to be sure
+                    // window.location.reload();
+                } else {
+                    alert("Failed to disconnect.");
+                }
+            } catch (e) { console.error(e); }
+        }
+
+        // UPDATED LOAD SETTINGS
+        async function loadSettings() {
+            const token = localStorage.getItem("supabase_token");
+            if (!token) return;
+
+            try {
+                const res = await fetch('/api/config', {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+
+                    // 1. System Prompt
+                    // 1. System Prompt
+                    if (data.system_instruction) {
+                        if (document.getElementById('system_instruction')) document.getElementById('system_instruction').value = data.system_instruction;
+                    }
+
+                    // 2. Exotel
+                    if (data.exotel_key) document.getElementById('exotel_key').value = data.exotel_key;
+                    if (data.exotel_token) document.getElementById('exotel_token').value = data.exotel_token;
+                    if (data.exotel_subdomain) document.getElementById('exotel_subdomain').value = data.exotel_subdomain;
+                    if (data.exotel_phone) document.getElementById('exotel_phone').value = data.exotel_phone;
+
+                    // 3. Calendar Toggle (LEGACY - REMOVED)
+                    // Logic commented out to prevent null reference errors after HTML removal
+                    // if (data.enable_calendar === true || data.enable_calendar === "true") { ... }
+
+                    // 4. Saved Rules (LEGACY - REMOVED)
+                    // Logic commented out to prevent null reference errors after HTML removal
+                    // const rulesList = document.getElementById('rulesList');
+
+                }
+            } catch (e) {
+                console.error("Error loading settings:", e);
+            }
+        }
+
+        async function saveSettings() {
+            const token = localStorage.getItem("supabase_token");
+            const prompt = document.getElementById('system_instruction').value;
+            const isCalendarEnabled = document.getElementById('enableCalendarToggle').checked;
+
+            // We need to preserve other settings (Exotel, Rules) if we overwrite.
+            // Ideally we should MERGE.
+            // For now, let's just grab existing state from DOM if populated, or fetch first?
+            // Since we loaded everything, the DOM has the state.
+
+            // Gather all (Safely)
+            const exotel_key = document.getElementById('exotel_key')?.value || null;
+            const exotel_token = document.getElementById('exotel_token')?.value || null;
+            const exotel_subdomain = document.getElementById('exotel_subdomain')?.value || null;
+            const exotel_phone = document.getElementById('exotel_phone')?.value || null;
+
+            // Rules are tricky, they are in memory/DOM. 
+            // Ideally we shouldn't overwrite rules here unless we store them in a var.
+            // HACK: Re-fetch config to get rules, update prompt/toggle, save back.
+
+            try {
+                const currentConfigRes = await fetch('/api/config', { headers: { "Authorization": `Bearer ${token}` } });
+                let currentConfig = await currentConfigRes.json();
+
+                const newConfig = {
+                    ...currentConfig,
+                    system_instruction: prompt,
+                    enable_calendar: isCalendarEnabled,
+                    exotel_key, exotel_token, exotel_subdomain, exotel_phone
+                };
+
+                const res = await fetch('/api/config', {
+                    method: 'POST',
+                    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+                    body: JSON.stringify(newConfig)
+                });
+                if (res.ok) {
+                    // visual feedback
+                    const btn = document.querySelector('button[onclick="saveSettings()"]');
+                    if (btn) btn.innerText = "Save Changes";
+
+                    alert("Settings Saved Successfully!");
+                    console.log("Settings Saved");
+                }
+            } catch (e) { console.error(e); }
+        }
+
+
+
+
+        // --- AUTOMATION RULES LOGIC ---
+        async function loadSheetColumns(sheetId, suffix) {
+            const colContainer = document.getElementById('autoColumnToUpdateContainer' + suffix);
+            const colDropdown = document.getElementById('autoColumnToUpdateDropdown' + suffix);
+
+            if (!colContainer || !colDropdown) return;
+
+            if (!sheetId) {
+                colContainer.classList.add('hidden');
+                return;
+            }
+
+            // Show loading state
+            colDropdown.innerHTML = '<option>Loading columns...</option>';
+            colContainer.classList.remove('hidden');
+
+            try {
+                const res = await authenticatedFetch(`/api/sheets/${sheetId}/columns`);
+                if (res && res.ok) {
+                    const data = await res.json();
+                    if (data.status === 'success' && data.columns && data.columns.length > 0) {
+                        colDropdown.innerHTML = '<option value="">Select a specific column...</option>';
+                        data.columns.forEach(col => {
+                            colDropdown.innerHTML += `<option value="${col}">${col}</option>`;
+                        });
+                    } else {
+                        colDropdown.innerHTML = '<option value="">No columns found</option>';
+                    }
+                } else {
+                    colDropdown.innerHTML = '<option value="">Error loading columns</option>';
+                }
+            } catch (e) {
+                console.error("Error loading columns:", e);
+                colDropdown.innerHTML = '<option value="">Error loading columns</option>';
+            }
+        }
+
+        async function toggleAutoService(suffix = "") {
+            const val = document.getElementById('autoServiceSelector' + suffix).value;
+            const container = document.getElementById('autoResourceContainer' + suffix);
+            const dropdown = document.getElementById('autoResourceDropdown' + suffix);
+            const colContainer = document.getElementById('autoColumnToUpdateContainer' + suffix);
+
+            if (colContainer) colContainer.classList.add('hidden'); // Hide initially when switching service
+
+            if (val === 'none') {
+                container.classList.add('hidden');
+                return;
+            }
+
+            container.classList.remove('hidden');
+            dropdown.innerHTML = '<option>Loading...</option>';
+
+            // Attach Listener for Columns
+            if (val === 'sheets') {
+                dropdown.onchange = function () {
+                    loadSheetColumns(this.value, suffix);
+                };
+            } else {
+                dropdown.onchange = null;
+            }
+
+            try {
+                let url = val === 'sheets' ? '/api/sheets' : '/api/calendars';
+                // USE AUTHENTICATED FETCH HELPER
+                const res = await authenticatedFetch(url);
+
+                if (res && res.ok) {
+                    const data = await res.json();
+
+                    if (val === 'sheets') {
+                        if (data.status === 'success' || (data.files && data.files.length > 0)) {
+                            console.log("[SHEETS] Loaded:", data.files);
+                            const list = data.files || [];
+                            if (list.length === 0) {
+                                dropdown.innerHTML = '<option value="">No files found (Check Google Drive)</option>';
+                                return;
+                            }
+                            dropdown.innerHTML = '<option value="">Select a Sheet...</option>';
+                            list.forEach(f => {
+                                dropdown.innerHTML += `<option value="${f.id}">${f.name}</option>`;
+                            });
+                        } else if (data.error) {
+                            console.error("[SHEETS] API Error:", data.error);
+                            dropdown.innerHTML = `<option value="">Error: ${data.error}</option>`;
+                        } else {
+                            dropdown.innerHTML = '<option value="">No files found</option>';
+                        }
+                    } else { // Calendars logic
+                        dropdown.innerHTML = "";
+                        if (data.error || !Array.isArray(data) || data.length === 0) {
+                            dropdown.innerHTML = '<option>No calendars found</option>';
+                            return;
+                        }
+                        data.forEach(item => {
+                            const opt = document.createElement('option');
+                            opt.value = item.id;
+                            opt.innerText = item.name || item.summary;
+                            dropdown.appendChild(opt);
+                        });
+                    }
+                } else {
+                    dropdown.innerHTML = '<option>Error loading (Auth?)</option>';
+                }
+            } catch (e) {
+                dropdown.innerHTML = '<option>Error loading</option>';
+                console.error(e);
+            }
+        }
+
+        async function saveAutomationRule(suffix = "") {
+            const service = document.getElementById('autoServiceSelector' + suffix).value;
+            const resourceId = document.getElementById('autoResourceDropdown' + suffix).value;
+            const resourceName = document.getElementById('autoResourceDropdown' + suffix).options[document.getElementById('autoResourceDropdown' + suffix).selectedIndex]?.text;
+            const instruction = document.getElementById('autoInstruction' + suffix).value;
+            const isActive = document.getElementById('autoRuleActive' + suffix).checked;
+
+            // Get Target Column
+            const targetColumn = document.getElementById('autoColumnToUpdateDropdown' + suffix)?.value || null;
+
+            if (!service || service === 'none') return alert("Select a service.");
+            if (!instruction) return alert("Enter an instruction.");
+
+            // Normalize Service Type
+            let serviceType = service === 'sheets' ? 'google_sheets' : (service === 'calendar' ? 'google_calendar' : service);
+
+            // APPLLIED SUFFIX FOR OUTBOUND
+            if (suffix === '_outbound') {
+                serviceType += '_outbound';
+            }
+
+            const payload = {
+                service_type: serviceType,
+                config_json: {
+                    resource_id: resourceId,
+                    resource_name: resourceName,
+                    instruction: instruction,
+                    target_column: targetColumn // Save it
+                },
+                is_active: isActive
+            };
+
+            try {
+                // Use authenticatedFetch (Correct Auth Header)
+                const res = await authenticatedFetch('/api/integrations/save', {
+                    method: 'POST',
+                    body: JSON.stringify(payload)
+                });
+
+                if (res && res.ok) {
+                    const data = await res.json();
+                    alert("Rule Saved Successfully!");
+
+                    // Clear Logic
+                    document.getElementById('autoInstruction' + suffix).value = "";
+                    if (document.getElementById('autoColumnToUpdateContainer' + suffix)) {
+                        document.getElementById('autoColumnToUpdateContainer' + suffix).classList.add('hidden');
+                    }
+
+                    // Refresh Config to show new rules
+                    loadData();
+                } else {
+                    const err = await res.json();
+                    alert("Failed to save: " + (err.detail || "Unknown Error"));
+                }
+            } catch (e) {
+                console.error(e);
+                alert("Network Error: " + e.message);
+            }
+        }
+
+        async function deleteRule(ruleId) {
+            if (!confirm("Are you sure you want to delete this rule?")) return;
+
+            const token = localStorage.getItem("auth_token");
+            try {
+                // Use new ID-based endpoint
+                const res = await authenticatedFetch(`/api/integrations/${ruleId}`, {
+                    method: 'DELETE',
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+
+                if (res && res.ok) {
+                    loadData(); // Refresh list
+                } else {
+                    alert("Failed to delete rule.");
+                }
+            } catch (e) {
+                alert("Error deleting rule: " + e);
+            }
+        }
+
+
+
+
+        function renderRules(rules) {
+            // Filter Rules based on Container Context
+            const containers = [
+                { id: 'activeRulesListContainer', type: 'inbound' },
+                { id: 'activeRulesListContainer_outbound', type: 'outbound' }
+            ];
+
+            // Hide loading spinner (only in config)
+            const spinner = document.getElementById('rulesLoadingSpinner');
+            if (spinner) spinner.remove();
+
+            containers.forEach(def => {
+                const container = document.getElementById(def.id);
+                if (!container) return;
+
+                container.innerHTML = "";
+
+                // FILTER: 
+                // Inbound container -> Show rules NOT ending in _outbound
+                // Outbound container -> Show rules ending in _outbound
+                const relevantRules = rules.filter(r => {
+                    const s = r.service || r.service_type || "";
+                    if (def.type === 'outbound') {
+                        return s.endsWith('_outbound');
+                    } else {
+                        return !s.endsWith('_outbound');
+                    }
+                });
+
+                if (!relevantRules || relevantRules.length === 0) {
+                    container.innerHTML = '<p class="text-xs text-gray-400 italic">No rules saved yet.</p>';
+                    return;
+                }
+
+                relevantRules.forEach((rule, index) => {
+                    const isActive = rule.is_active !== false;
+                    const statusColor = isActive ? "bg-green-100 text-green-800 border-green-200" : "bg-gray-100 text-gray-500 border-gray-200";
+                    const activeText = isActive ? "ACTIVE" : "INACTIVE";
+
+                    const resName = rule.resource_name || rule.resource_id || "Unknown Resource";
+                    const instruction = rule.instruction || "No Instruction";
+                    let service = (rule.service || rule.service_type || "unknown").replace('google_', '');
+
+                    // Display clean name
+                    service = service.replace('_outbound', '');
+
+                    const div = document.createElement('div');
+                    div.className = "flex justify-between items-start bg-white p-3 rounded border border-gray-200 shadow-sm mb-2";
+
+                    div.innerHTML = `
+                        <div class="pr-3">
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded text-[10px] uppercase border border-blue-100">${service}</span>
+                                <span class="text-[10px] font-bold px-2 py-0.5 rounded border ${statusColor}">${activeText}</span>
+                            </div>
+                            <div class="text-sm font-bold text-gray-900 break-all">${resName}</div>
+                            <div class="text-xs text-gray-600 mt-1 italic">"${instruction}"</div>
+                        </div>
+                        <button onclick="deleteRule('${rule.id}')" class="text-gray-400 hover:text-red-600 p-2" title="Delete">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                     `;
+                    container.appendChild(div);
+                });
+            });
+        }
+
+
+
+        // --- SYSTEM INSTRUCTION SAVING (OUTBOUND) ---
+        async function saveOutboundInstruction() {
+            const token = getAuthToken();
+            const prompt = document.getElementById('system-prompt').value;
+            const btn = document.querySelector('button[onclick="saveOutboundInstruction()"]');
+
+            // Allow empty prompt clearing, but if user clicked Save on empty, maybe warn? 
+            // Actually clearing is fine.
+
+            if (btn) btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-1"></i> Saving...';
+
+            try {
+                // Fetch current config to preserve other settings
+                const currentConfigRes = await authenticatedFetch(`${API}/config`);
+                let currentConfig = await currentConfigRes.json();
+
+                const newConfig = {
+                    ...currentConfig,
+                    outbound_system_instruction: prompt // Use persistent column
+                };
+
+                const res = await authenticatedFetch(`${API}/config`, {
+                    method: 'POST',
+                    body: JSON.stringify(newConfig)
+                });
+
+                if (res.ok) {
+                    if (btn) {
+                        btn.innerHTML = '<i class="fa-solid fa-check mr-1"></i> Saved';
+                        setTimeout(() => btn.innerHTML = '<i class="fa-solid fa-save mr-1"></i> Save Default', 2000);
+                    }
+                } else {
+                    const err = await res.json();
+                    throw new Error(err.detail || "Failed to save");
+                }
+            } catch (e) {
+                console.error(e);
+                alert("Error saving: " + e.message);
+                if (btn) btn.innerHTML = '<i class="fa-solid fa-save mr-1"></i> Save Default';
+            }
+        }
+
+        // --- OUTBOUND CALLS FUNCTIONS ---
+        let callHistoryPage = 0;
+        const CALLS_PER_PAGE = 20;
+
+        async function loadTwilioNumbers() {
+            console.log('[OUTBOUND] Loading Twilio numbers...');
+            const datalist = document.getElementById('twilio-numbers-list');
+
+            try {
+                const res = await authenticatedFetch('/api/calls/numbers');
+                if (res && res.ok) {
+                    const data = await res.json();
+                    console.log('[OUTBOUND] Numbers loaded:', data);
+
+                    if (data.numbers && data.numbers.length > 0) {
+                        datalist.innerHTML = '';
+                        data.numbers.forEach(num => {
+                            const option = document.createElement('option');
+                            option.value = num.phone_number;
+                            option.label = `${num.phone_number} (${num.friendly_name || 'No name'})`;
+                            datalist.appendChild(option);
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('[OUTBOUND] Error loading numbers:', error);
+            }
+        }
+
+        async function makeOutboundCall() {
+            const from = document.getElementById('call-from-number').value;
+            const to = document.getElementById('call-to-number').value;
+            const btn = document.getElementById('make-call-btn');
+
+            if (!from) {
+                alert('Please select a "From" number');
+                return;
+            }
+
+            if (!to) {
+                alert('Please enter a destination number');
+                return;
+            }
+
+            // Auto-add +91 if missing
+            let formattedTo = to.replace(/[\s\-\(\)\.]/g, ''); // Remove common separators
+            if (!formattedTo.startsWith('+')) {
+                // If starts with 0, remove it before adding +91
+                if (formattedTo.startsWith('0')) formattedTo = formattedTo.substring(1);
+                formattedTo = '+91' + formattedTo;
+                console.log(`[OUTBOUND] Auto-formatting to: ${formattedTo}`);
+            }
+
+            // Basic phone number validation
+            if (!/^\+?[1-9]\d{1,14}$/.test(formattedTo)) {
+                alert('Please enter a valid phone number (e.g., 9876543210 or +919876543210)');
+                return;
+            }
+
+            // Context from Sheet
+            // Check original input OR formatted input in map
+            const context = window.sheetContactsMap ? (window.sheetContactsMap[to] || window.sheetContactsMap[formattedTo]) : {};
+
+            // System Prompt
+            const systemPrompt = document.getElementById('system-prompt') ? document.getElementById('system-prompt').value : '';
+
+            console.log('[OUTBOUND] Making call:', { from, to, context, systemPrompt });
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Calling...';
+
+            try {
+                const res = await authenticatedFetch('/api/calls/make', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ from, to: formattedTo, context, system_prompt: systemPrompt })
+                });
+
+                const data = await res.json();
+
+                if (res.ok) {
+                    console.log('[OUTBOUND] Call initiated:', data);
+                    alert(`✅ Call initiated successfully!\nCall SID: ${data.call_sid}\nStatus: ${data.status}`);
+
+                    // Clear the "To" number field
+                    document.getElementById('call-to-number').value = '';
+
+                    // Reload call history and active calls
+                    loadCallHistory();
+                    loadActiveCalls();
+                } else {
+                    throw new Error(data.detail || data.error || 'Failed to make call');
+                }
+            } catch (error) {
+                console.error('[OUTBOUND] Call error:', error);
+                alert(`❌ Failed to make call:\n${error.message}`);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-phone mr-2"></i> Make Call';
+            }
+        }
+
+        async function loadActiveCalls() {
+            console.log('[OUTBOUND] Loading active calls...');
+            const container = document.getElementById('active-calls-container');
+
+            try {
+                const res = await authenticatedFetch('/api/calls/active');
+                if (res && res.ok) {
+                    const data = await res.json();
+                    console.log('[OUTBOUND] Active calls:', data);
+
+                    if (data.calls && data.calls.length > 0) {
+                        container.innerHTML = '';
+                        data.calls.forEach(call => {
+                            const div = document.createElement('div');
+                            div.className = 'flex items-center justify-between p-4 bg-green-50 border border-green-200 rounded-lg mb-2';
+                            div.innerHTML = `
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="text-sm font-bold text-gray-900">${call.to}</span>
+                                        <span class="px-2 py-0.5 bg-green-100 text-green-800 text-xs font-semibold rounded">${call.status}</span>
+                                    </div>
+                                    <div class="text-xs text-gray-600">From: ${call.from} | Duration: ${call.duration || 0}s</div>
+                                </div>
+                                <button onclick="hangupCall('${call.sid}')" 
+                                    class="px-3 py-1.5 bg-red-600 text-white text-xs font-semibold rounded hover:bg-red-700 transition">
+                                    <i class="fa-solid fa-phone-slash mr-1"></i>
+                                    Hangup
+                                </button>
+                            `;
+                            container.appendChild(div);
+                        });
+                    } else {
+                        container.innerHTML = `
+                            <div class="text-center py-8 text-gray-400">
+                                <i class="fa-solid fa-phone-slash text-4xl mb-3"></i>
+                                <p class="text-sm">No active calls</p>
+                            </div>
+                        `;
+                    }
+                }
+            } catch (error) {
+                console.error('[OUTBOUND] Error loading active calls:', error);
+            }
+        }
+
+        async function hangupCall(callSid) {
+            if (!confirm('End this call?')) return;
+
+            console.log('[OUTBOUND] Hanging up call:', callSid);
+
+            try {
+                const res = await authenticatedFetch(`/api/calls/${callSid}/hangup`, {
+                    method: 'POST'
+                });
+
+                if (res && res.ok) {
+                    alert('✅ Call ended');
+                    loadActiveCalls();
+                    loadCallHistory();
+                } else {
+                    const data = await res.json();
+                    throw new Error(data.detail || 'Failed to end call');
+                }
+            } catch (error) {
+                console.error('[OUTBOUND] Hangup error:', error);
+                alert(`❌ Failed to end call:\n${error.message}`);
+            }
+        }
+
+        async function loadCallHistory(page = 0) {
+            console.log('[OUTBOUND] Loading call history, page:', page);
+            callHistoryPage = page;
+            const tbody = document.getElementById('call-history-tbody');
+            const prevBtn = document.getElementById('prev-page-btn');
+            const nextBtn = document.getElementById('next-page-btn');
+            const pageDisplay = document.getElementById('current-page');
+
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="7" class="px-6 py-8 text-center text-gray-400">
+                        <i class="fa-solid fa-spinner fa-spin text-2xl mb-2"></i>
+                        <p class="text-sm">Loading call history...</p>
+                    </td>
+                </tr>
+            `;
+
+            try {
+                const res = await authenticatedFetch(`/api/calls/history?page=${page}&limit=${CALLS_PER_PAGE}`);
+                if (res && res.ok) {
+                    const data = await res.json();
+                    console.log('[OUTBOUND] Call history:', data);
+
+                    if (data.calls && data.calls.length > 0) {
+                        tbody.innerHTML = '';
+                        data.calls.forEach(call => {
+                            const row = document.createElement('tr');
+                            row.className = 'hover:bg-gray-50';
+
+                            const date = new Date(call.date_created || call.start_time);
+                            const statusColor = {
+                                'completed': 'text-green-600',
+                                'busy': 'text-yellow-600',
+                                'no-answer': 'text-gray-600',
+                                'failed': 'text-red-600',
+                                'canceled': 'text-gray-500'
+                            }[call.status] || 'text-gray-600';
+
+                            row.innerHTML = `
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    ${date.toLocaleString()}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                    ${call.to}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                    ${call.from}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                    ${call.duration ? call.duration + 's' : '-'}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold ${statusColor}">
+                                    ${call.status}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    ${call.price ? '$' + Math.abs(call.price) : '-'}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                     ${call.system_prompt
+                                    ? `<button onclick="alert(\`System Instructions:\\n\\n${call.system_prompt.replace(/`/g, '\\`').replace(/'/g, "\\'")}\`)" class="text-blue-600 hover:text-blue-800" title="View Instructions"><i class="fa-solid fa-file-lines"></i></button>`
+                                    : '<span class="text-gray-300">-</span>'}
+                                </td>
+                            `;
+                            tbody.appendChild(row);
+                        });
+
+                        // Update pagination
+                        pageDisplay.textContent = page + 1;
+                        prevBtn.disabled = page === 0;
+                        nextBtn.disabled = data.calls.length < CALLS_PER_PAGE;
+                    } else {
+                        tbody.innerHTML = `
+                            <tr>
+                                <td colspan="7" class="px-6 py-8 text-center text-gray-400">
+                                    <i class="fa-solid fa-phone text-4xl mb-3"></i>
+                                    <p class="text-sm">No call history yet</p>
+                                </td>
+                            </tr>
+                        `;
+                        prevBtn.disabled = true;
+                        nextBtn.disabled = true;
+                    }
+                }
+            } catch (error) {
+                console.error('[OUTBOUND] Error loading call history:', error);
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="px-6 py-8 text-center text-red-400">
+                            <i class="fa-solid fa-exclamation-triangle text-2xl mb-2"></i>
+                            <p class="text-sm">Error loading call history</p>
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+
+
+
+        // --- SHEETS CONTACTS IMPORT FUNCTIONS ---
+        function showSheetContactsModal() {
+            const modal = document.getElementById('sheet-contacts-modal');
+            modal.classList.remove('hidden');
+
+            // Load available sheets
+            loadSheetsForContacts();
+        }
+
+        function closeSheetContactsModal() {
+            const modal = document.getElementById('sheet-contacts-modal');
+            modal.classList.add('hidden');
+        }
+
+        async function loadSheetsForContacts() {
+            const dropdown = document.getElementById('contacts-sheet-dropdown');
+            dropdown.innerHTML = '<option value="">Loading sheets...</option>';
+
+            try {
+                const res = await authenticatedFetch('/api/sheets');
+                if (res && res.ok) {
+                    const data = await res.json();
+
+                    if (data.files && data.files.length > 0) {
+                        dropdown.innerHTML = '<option value="">Select a sheet...</option>';
+                        data.files.forEach(file => {
+                            const option = document.createElement('option');
+                            option.value = file.id;
+                            option.textContent = file.name;
+                            dropdown.appendChild(option);
+                        });
+                    } else {
+                        dropdown.innerHTML = '<option value="">No sheets found</option>';
+                    }
+                } else {
+                    dropdown.innerHTML = '<option value="">Error loading sheets</option>';
+                }
+            } catch (error) {
+                console.error('[SHEETS] Error loading sheets:', error);
+                dropdown.innerHTML = '<option value="">Error loading sheets</option>';
+            }
+        }
+
+        async function loadContactsFromSheet() {
+            const sheetId = document.getElementById('contacts-sheet-dropdown').value;
+            const columnContainer = document.getElementById('column-selection-container');
+            const columnDropdown = document.getElementById('phone-column-dropdown');
+
+            if (!sheetId) {
+                columnContainer.style.display = 'none';
+                return;
+            }
+
+            console.log('[SHEETS] Loading columns from sheet:', sheetId);
+            columnDropdown.innerHTML = '<option value="">Loading columns...</option>';
+            columnContainer.style.display = 'block';
+
+            try {
+                const res = await authenticatedFetch(`/api/sheets/${sheetId}/data`);
+                if (res && res.ok) {
+                    const data = await res.json();
+                    console.log('[SHEETS] Sheet data loaded:', data);
+
+                    if (data.rows && data.rows.length > 0) {
+                        // Get column headers from first row (or API response headers if available)
+                        const columns = data.headers || Object.keys(data.rows[0]);
+
+                        // Populate Column Dropdown
+                        columnDropdown.innerHTML = '<option value="">Select a column...</option>';
+                        columns.forEach(col => {
+                            const option = document.createElement('option');
+                            option.value = col;
+                            option.textContent = col;
+                            columnDropdown.appendChild(option);
+                        });
+
+                        // Pre-select common phone column names
+                        const phoneColumns = ['Phone', 'phone', 'Mobile', 'mobile', 'Number', 'number', 'PhoneNumber', 'Phone Number'];
+                        for (const col of phoneColumns) {
+                            if (columns.includes(col)) {
+                                columnDropdown.value = col;
+                                break;
+                            }
+                        }
+
+                    } else {
+                        columnDropdown.innerHTML = '<option value="">No data in sheet</option>';
+                    }
+                } else {
+                    throw new Error('Failed to load sheet data');
+                }
+            } catch (error) {
+                console.error('[SHEETS] Error loading columns:', error);
+                columnDropdown.innerHTML = '<option value="">Error loading columns</option>';
+            }
+        }
+
+        async function importContactsFromSheet() {
+            const sheetId = document.getElementById('contacts-sheet-dropdown').value;
+            const columnName = document.getElementById('phone-column-dropdown').value;
+            const statusDiv = document.getElementById('import-status');
+            const statusText = document.getElementById('import-status-text');
+
+            if (!sheetId) {
+                alert('Please select a sheet');
+                return;
+            }
+
+            if (!columnName) {
+                alert('Please select a phone number column');
+                return;
+            }
+
+            console.log('[SHEETS] Importing contacts from sheet:', sheetId, 'Column:', columnName);
+            statusDiv.classList.remove('hidden');
+            statusText.textContent = 'Loading contacts...';
+
+            try {
+                const res = await authenticatedFetch(`/api/sheets/${sheetId}/data`);
+                if (res && res.ok) {
+                    const data = await res.json();
+                    console.log('[SHEETS] Sheet data:', data);
+
+                    if (data.rows && data.rows.length > 0) {
+                        const datalist = document.getElementById('contacts-list');
+                        datalist.innerHTML = '';
+
+                        let count = 0;
+                        data.rows.forEach(row => {
+                            let phoneNumber = row[columnName];
+                            if (phoneNumber) {
+                                // Normalize Number (Add +91 if missing)
+                                let rawPhone = String(phoneNumber).trim().replace(/[\s\-\(\)\.]/g, '');
+                                if (!rawPhone.startsWith('+')) {
+                                    if (rawPhone.startsWith('0')) rawPhone = rawPhone.substring(1);
+                                    rawPhone = '+91' + rawPhone;
+                                }
+
+                                const option = document.createElement('option');
+                                option.value = rawPhone;
+                                option.label = `${rawPhone} ${row['Name'] || row['name'] || ''}`.trim();
+                                datalist.appendChild(option);
+                                count++;
+
+                                // Store context map (Robust)
+                                if (!window.sheetContactsMap) window.sheetContactsMap = {};
+
+                                const cleanKey = rawPhone;
+                                window.sheetContactsMap[cleanKey] = row;
+                                // Also store raw just in case
+                                window.sheetContactsMap[phoneNumber] = row;
+
+                                console.log('[SHEETS] Context stored for:', cleanKey);
+                            }
+                        });
+
+                        statusText.textContent = `Imported ${count} contacts!`;
+                        document.getElementById('import-status').querySelector('div').className = 'bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800';
+                        document.getElementById('import-status').querySelector('i').className = 'fa-solid fa-check-circle mr-2';
+
+                        // Update status text
+                        document.getElementById('sheet-status-text').innerHTML = `
+                            <i class="fa-solid fa-check-circle text-green-600 mr-1"></i>
+                            ${count} contacts imported from sheet
+                        `;
+
+                        // Close modal after 2 seconds
+                        setTimeout(() => {
+                            closeSheetContactsModal();
+                        }, 2000);
+                    } else {
+                        throw new Error('No data found in sheet');
+                    }
+                } else {
+                    throw new Error('Failed to fetch sheet data');
+                }
+            } catch (error) {
+                console.error('[SHEETS] Error importing contacts:', error);
+                statusText.textContent = `Error: ${error.message}`;
+                document.getElementById('import-status').querySelector('div').className = 'bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800';
+                document.getElementById('import-status').querySelector('i').className = 'fa-solid fa-exclamation-triangle mr-2';
+            }
+        }
+
+
+
+        async function logout() {
+            if (confirm("Log out of Agent Dashboard?")) {
+                try {
+                    await _supabase.auth.signOut();
+                } catch (e) {
+                    console.warn("Supabase SignOut Error:", e);
+                }
+                localStorage.removeItem("supabase_token");
+                localStorage.removeItem("user_email");
+                window.location.href = "/login";
+            }
+        }
+
+        // Global Context Map
+        window.sheetContactsMap = {};
+
+        // Listener for Call To Number context display
+        document.addEventListener('DOMContentLoaded', () => {
+            const input = document.getElementById('call-to-number');
+
+            if (input) {
+                const updateContextDisplay = function (e) {
+                    const val = String(e.target.value).trim();
+                    console.log('[UI-DEBUG] Event:', e.type, 'Value:', val);
+
+                    if (window.sheetContactsMap) {
+                        // console.log('[UI-DEBUG] Map Size:', Object.keys(window.sheetContactsMap).length);
+                    }
+
+                    // Try exact match then clean match (strip spaces)
+                    let context = window.sheetContactsMap ? window.sheetContactsMap[val] : null;
+
+                    if (!context && window.sheetContactsMap && val) {
+                        const cleanVal = val.replace(/\s+/g, '');
+                        context = window.sheetContactsMap[cleanVal];
+                        if (context) console.log('[UI-DEBUG] Found context via clean val:', cleanVal);
+                    }
+
+                    // Try stripping + prefix if present (e.g. +1234567890 vs 1234567890)
+                    if (!context && window.sheetContactsMap && val && val.startsWith('+')) {
+                        const cleanVal = val.substring(1).replace(/\s+/g, '');
+                        context = window.sheetContactsMap[cleanVal];
+                        if (context) console.log('[UI-DEBUG] Found context via + stripped val:', cleanVal);
+                    }
+
+                    // New Panel Elements
+                    const placeholder = document.getElementById('context-placeholder');
+                    const contentDiv = document.getElementById('context-content');
+                    const badge = document.getElementById('context-badge');
+
+                    if (context) {
+                        console.log('[UI-DEBUG] Context Found. Updating UI.');
+                        // Hide placeholder, Show Content
+                        if (placeholder) placeholder.classList.add('hidden');
+                        if (contentDiv) {
+                            contentDiv.classList.remove('hidden');
+                            contentDiv.innerHTML = ''; // Clear previous
+
+                            // 1. Primary Info (Name)
+                            const nameKey = Object.keys(context).find(k => k.toLowerCase().includes('name')) || 'Name';
+                            const nameVal = context[nameKey] || 'Unknown';
+
+                            contentDiv.innerHTML += `
+                                <div class="mb-4 text-center">
+                                    <div class="inline-flex h-12 w-12 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 font-bold text-lg mb-2 shadow-sm">
+                                        ${nameVal.charAt(0).toUpperCase()}
+                                    </div>
+                                    <h4 class="text-lg font-bold text-gray-900">${nameVal}</h4>
+                                    <p class="text-xs text-blue-600 font-mono bg-blue-50 px-2 py-0.5 rounded-full inline-block mt-1">${val}</p>
+                                </div>
+                                <hr class="border-gray-100 mb-4">
+                                <div class="space-y-3">
+                            `;
+
+                            // 2. All Other Fields
+                            Object.entries(context).forEach(([k, v]) => {
+                                if (k !== nameKey && k.toLowerCase() !== 'phone' && String(v).trim() !== "") {
+                                    contentDiv.innerHTML += `
+                                        <div class="group">
+                                            <span class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 group-hover:text-blue-500 transition-colors">${k}</span>
+                                            <span class="block text-sm font-medium text-gray-700 break-words bg-gray-50 p-2.5 rounded-lg border border-gray-100 group-hover:border-blue-200 group-hover:bg-blue-50/30 transition-all">${v}</span>
+                                        </div>
+                                     `;
+                                }
+                            });
+
+                            contentDiv.innerHTML += '</div>';
+                        }
+                        if (badge) badge.classList.remove('hidden');
+
+                    } else {
+                        // console.log('[UI-DEBUG] No Context Found. Showing Placeholder.');
+                        // Show Placeholder
+                        if (placeholder) placeholder.classList.remove('hidden');
+                        if (contentDiv) contentDiv.classList.add('hidden');
+                        if (badge) badge.classList.add('hidden');
+                    }
+                };
+
+                input.addEventListener('input', updateContextDisplay);
+                input.addEventListener('change', updateContextDisplay);
+                console.log('[UI] Context listeners attached');
+
+                // Expose for debugging
+                window.debugContextUI = () => updateContextDisplay({ target: input, type: 'manual' });
+            }
+        });
+
+        async function checkGoogleAuth() {
+            // Determine what to show in the UI based on auth status
+            // This is a placeholder as the real check happens via backend or when action is attempted
+            console.log("Checking Google Auth status...");
+        }
+
+        window.onload = async function () {
+            // DOMAIN CHECK (OAuth Fix)
+            const currentHost = window.location.hostname;
+            const requiredHost = "tinselly-incompliant-earlean.ngrok-free.dev";
+
+            if (currentHost === "localhost" || currentHost === "127.0.0.1") {
+                // Check if we have an auth hash (coming from Supabase)
+                if (window.location.hash.includes("access_token")) {
+                    console.log("Redirecting Authed User to Ngrok...");
+                    window.location.href = `https://${requiredHost}${window.location.pathname}${window.location.search}${window.location.hash}`;
+                    return;
+                }
+
+                // Also redirect general 8027 traffic
+                if (window.location.port === "8027") {
+                    window.location.href = `https://${requiredHost}${window.location.pathname}${window.location.search}`;
+                    return;
+                }
+            }
+
+            // 1. Check for incoming OAuth Hash (Supabase)
+            const { data: { session }, error } = await _supabase.auth.getSession();
+
+            if (error) {
+                console.error("Supabase Auth Error:", error);
+                alert("Auth Error: " + error.message);
+                // Do not redirect, let user see error
+                return;
+            }
+
+            if (session) {
+                // If we have a session, save it immediately
+                console.log("Supabase Session Found:", session.user.email);
+                localStorage.setItem("supabase_token", session.access_token);
+                localStorage.setItem("user_email", session.user.email);
+
+                // --- CLEAN SLATE: VAULT CREDENTIALS ---
+                // We securely vault the Google Tokens in 'app_credentials' via the Backend.
+                // This ensures the server can access Sheets/Calendar offline.
+                // LEGACY CODE REMOVED to avoid 500 Errors. Use 'Authorize / Fix' button.
+            }
+
+            // 2. Validate Token Existence
+            const token = localStorage.getItem("supabase_token");
+            if (!token) {
+                console.warn("No Supabase Token Found - Redirecting to Login");
+                // DEBUG: If we have a hash but no session, it failed.
+                if (window.location.hash) {
+                    alert("Login Failed. Hash present but no Session.\nCheck Console.");
+                    return;
+                }
+                window.location.href = "/login";
+                return;
+            }
+
+            // Standard App Init
+            loadData();
+            loadCalls();
+            loadLeads();
+            // loadKB(); // Function doesn't exist - commented out
+            connectAgent();
+            checkGoogleAuth();
+        };
+
+    </script>
+    <script>
+        async function connectGoogle() {
+            try {
+                const token = getAuthToken();
+                const res = await fetch('/api/oauth/google/authorize', {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                const data = await res.json();
+                if (data.url) {
+                    const width = 500;
+                    const height = 600;
+                    const left = (window.innerWidth / 2) - (width / 2);
+                    const top = (window.innerHeight / 2) - (height / 2);
+                    window.open(data.url, "GoogleAuth", `width=${width},height=${height},top=${top},left=${left}`);
+
+                    // Listener for close
+                    window.addEventListener("message", (event) => {
+                        if (event.data === "google-connected") {
+                            alert("Google Connected Successfully!");
+                            toggleAutoService(); // Refresh
+                        }
+                    });
+                } else {
+                    alert("Error generating Auth URL. Check server logs.");
+                }
+            } catch (e) { alert("Error: " + e); }
+        }
+    </script>
+</body>
+
+</html>

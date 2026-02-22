@@ -1,0 +1,29 @@
+# Environment variables
+.env
+.env.twilio.template
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+ENV/
+
+# IDEs
+.vscode/
+.idea/
+
+# System-generated
+.gemini/
+.antigravity/
+.agent/
+_archive/
+*.log
+
+# Project specific
+DB.sql
+config.json.bak
+test_*.py
+!test_advanced_conditioning.py

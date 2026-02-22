@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workflows - CCALL Enterprise</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+
+        /* Flow Connector Line */
+        .flow-line {
+            width: 2px;
+            height: 40px;
+            background-color: #e5e7eb;
+            margin: 0 auto;
+        }
+
+        /* Card Hover Effect */
+        .workflow-card {
+            transition: all 0.2s ease;
+        }
+
+        .workflow-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #d1d5db;
+            border-radius: 3px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #9ca3af;
+        }
+    </style>
+</head>
+
+<body class="flex h-screen overflow-hidden">
+
+    <!-- SIDEBAR -->
+    <aside class="w-64 bg-gray-900 text-white flex flex-col shadow-xl z-20">
+        <div class="p-6 flex items-center gap-3 border-b border-gray-800">
+            <div
+                class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+                <i class="fa-solid fa-robot text-white text-sm"></i>
+            </div>
+            <span class="font-bold text-lg tracking-tight">CCALL<span class="text-blue-400">.ai</span></span>
+        </div>
+
+        <nav class="flex-1 px-4 py-6 space-y-2">
+            <a href="/"
+                class="flex items-center gap-3 px-4 py-3 text-gray-400 hover:bg-gray-800 hover:text-white rounded-xl transition-all group">
+                <i class="fa-solid fa-chart-line w-5 group-hover:text-blue-400 transition-colors"></i>
+                <span class="font-medium">Dashboard</span>
+            </a>
+
+            <a href="/workflows"
+                class="flex items-center gap-3 px-4 py-3 bg-blue-600/10 text-blue-400 rounded-xl transition-all border border-blue-600/20 shadow-sm">
+                <i class="fa-solid fa-diagram-project w-5"></i>
+                <span class="font-medium">Workflows</span>
+            </a>
+
+            <a href="/settings"
+                class="flex items-center gap-3 px-4 py-3 text-gray-400 hover:bg-gray-800 hover:text-white rounded-xl transition-all group">
+                <i class="fa-solid fa-cog w-5 group-hover:text-blue-400 transition-colors"></i>
+                <span class="font-medium">Settings</span>
+            </a>
+        </nav>
+
+        <div class="p-4 border-t border-gray-800">
+            <!-- User Profile Snippet -->
+            <div class="flex items-center gap-3 px-4 py-3 rounded-xl bg-gray-800/50 border border-gray-700/50">
+                <div
+                    class="w-8 h-8 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center text-xs font-bold">
+                    AD
+                </div>
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm font-medium truncate" id="user_email_display">Admin</p>
+                    <p class="text-xs text-gray-500 truncate">Enterprise Plan</p>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="flex-1 flex flex-col h-screen overflow-hidden relative">
+
+        <!-- HEADER -->
+        <header class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 shadow-sm z-10">
+            <div class="flex items-center gap-4">
+                <h1 class="text-xl font-bold text-gray-800">Workflows</h1>
+                <!-- Back Button (Initially Hidden) -->
+                <button type="button" id="back_btn" onclick="showListView()"
+                    class="hidden text-sm text-gray-500 hover:text-blue-600 flex items-center gap-1">
+                    <i class="fa-solid fa-arrow-left"></i> Back to List
+                </button>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <!-- Create New Button (Visible in List View) -->
+                <button type="button" id="create_btn" onclick="createNewWorkflow()"
+                    class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-2">
+                    <i class="fa-solid fa-plus"></i> New Workflow
+                </button>
+
+                <!-- Save Button (Visible in Editor View) -->
+                <button type="button" id="save_btn" onclick="saveWorkflow()"
+                    class="hidden px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors shadow-sm flex items-center gap-2">
+                    <i class="fa-solid fa-save"></i> Save Workflow
+                </button>
+            </div>
+        </header>
+
+        <!-- VIEW 1: LIST VIEW -->
+        <div id="view_list" class="flex-1 overflow-y-auto bg-gray-50 p-8">
+            <div class="max-w-6xl mx-auto">
+                <h2 class="text-lg font-semibold text-gray-700 mb-4">My Workflows</h2>
+
+                <!-- Loading State -->
+                <div id="loading_list" class="flex justify-center py-12">
+                    <i class="fa-solid fa-spinner fa-spin text-3xl text-gray-300"></i>
+                </div>
+
+                <!-- Empty State -->
+                <div id="empty_list"
+                    class="hidden flex flex-col items-center justify-center py-20 bg-white rounded-2xl border border-dashed border-gray-300">
+                    <div class="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-4">
+                        <i class="fa-solid fa-diagram-project text-2xl text-blue-500"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-gray-800">No Workflows Yet</h3>
+                    <p class="text-gray-500 mb-6 text-center max-w-sm">Create your first automation workflow to handle
+                        calls intelligently.</p>
+                    <button type="button" onclick="createNewWorkflow()"
+                        class="px-5 py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition">
+                        Create Workflow
+                    </button>
+                </div>
+
+                <!-- Grid -->
+                <div id="workflows_grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 hidden">
+                    <!-- Workflow Cards Injected Here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW 2: EDITOR VIEW -->
+        <div id="view_editor" class="hidden flex-1 overflow-y-auto bg-gray-50/50 p-8">
+            <div class="max-w-3xl mx-auto">
+
+                <!-- Metadata Inputs -->
+                <div class="mb-8 bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+                    <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Workflow
+                        Name</label>
+                    <input type="text" id="workflow_name"
+                        class="w-full text-xl font-bold text-gray-800 border-none focus:ring-0 p-0 placeholder-gray-300"
+                        placeholder="Untitled Workflow" value="Untitled Workflow">
+                </div>
+
+                <!-- START NODE (Trigger) -->
+                <div class="relative group">
+                    <div
+                        class="w-full bg-white rounded-2xl border border-gray-200 p-6 shadow-sm hover:shadow-md transition-shadow relative workflow-card">
+                        <div class="absolute top-0 left-0 w-1.5 h-full bg-blue-500"></div>
+                        <div class="flex items-start gap-4">
+                            <div
+                                class="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl shrink-0">
+                                <i class="fa-solid fa-phone"></i>
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-gray-900">Call Completed</h3>
+                                <p class="text-sm text-gray-500 mt-1">Triggers immediately after the call finishes.</p>
+
+                                <!-- Trigger Filter -->
+                                <div class="mt-3">
+                                    <label
+                                        class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Run
+                                        On:</label>
+                                    <select id="trigger_filter"
+                                        class="w-full bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2">
+                                        <option value="any">Any Call Type</option>
+                                        <option value="inbound">Inbound Only</option>
+                                        <option value="outbound">Outbound Only</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="ml-auto">
+                                <span
+                                    class="px-2 py-1 text-xs font-medium bg-blue-50 text-blue-700 rounded-md">Trigger</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CONNECTOR -->
+                <div class="flow-line border-l-2 border-dashed border-gray-300"></div>
+
+                <!-- ACTION STACK (Container) -->
+                <div id="workflow_stack">
+                    <!-- Dynamic Actions -->
+                </div>
+
+                <!-- ADD BUTTON -->
+                <div class="flex justify-center py-4">
+                    <button type="button" onclick="showActionMenu()"
+                        class="group flex flex-col items-center gap-2 focus:outline-none">
+                        <div
+                            class="w-12 h-12 rounded-full bg-white border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400 group-hover:border-blue-500 group-hover:text-blue-500 transition-all shadow-sm">
+                            <i class="fa-solid fa-plus transition-transform group-hover:rotate-90"></i>
+                        </div>
+                        <span class="text-xs font-medium text-gray-400 group-hover:text-blue-500 transition-colors">Add
+                            Step</span>
+                    </button>
+                </div>
+
+                <!-- Delete Workflow Button (Only for existing) -->
+                <div id="delete_workflow_container" class="mt-12 pt-8 border-t border-gray-200 text-center hidden">
+                    <button type="button" onclick="deleteCurrentWorkflow()"
+                        class="text-red-500 text-sm hover:underline">Delete this
+                        Workflow</button>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <!-- ACTION SELECTOR MODAL -->
+    <div id="action_modal"
+        class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden flex items-center justify-center">
+        <div
+            class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden m-4 animate-in fade-in zoom-in duration-200">
+            <div class="p-6 border-b border-gray-100 flex justify-between items-center">
+                <h2 class="text-lg font-bold text-gray-800">Select an Action</h2>
+                <button type="button" onclick="closeActionMenu()" class="text-gray-400 hover:text-gray-600"><i
+                        class="fa-solid fa-times text-xl"></i></button>
+            </div>
+
+            <div class="p-6 grid grid-cols-2 gap-4">
+                <!-- Google Sheets -->
+                <button type="button" onclick="addAction('sheets')"
+                    class="flex flex-col items-center p-6 rounded-xl border border-gray-200 hover:border-green-500 hover:bg-green-50 transition-all group text-center">
+                    <div
+                        class="w-12 h-12 rounded-full bg-green-100 text-green-600 flex items-center justify-center text-xl mb-3 group-hover:scale-110 transition-transform">
+                        <i class="fa-solid fa-table"></i>
+                    </div>
+                    <h3 class="font-bold text-gray-900">Google Sheets</h3>
+                    <p class="text-xs text-gray-500 mt-1">Add or Update Row</p>
+                </button>
+
+                <!-- Cal.com / Calendar -->
+                <button type="button" onclick="addAction('calendar')"
+                    class="flex flex-col items-center p-6 rounded-xl border border-gray-200 hover:border-blue-500 hover:bg-blue-50 transition-all group text-center">
+                    <div
+                        class="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xl mb-3 group-hover:scale-110 transition-transform">
+                        <i class="fa-solid fa-calendar-check"></i>
+                    </div>
+                    <h3 class="font-bold text-gray-900">Google Calendar</h3>
+                    <p class="text-xs text-gray-500 mt-1">Create Event</p>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCRIPT -->
+    <script>
+        // --- Auth Check ---
+        // --- Auth Check ---
+        const token = localStorage.getItem("supabase_token");
+        if (!token) window.location.href = "/login";
+
+        // Fetch User Profile
+        async function loadUserProfile() {
+            const localEmail = localStorage.getItem("user_email");
+            if (localEmail) {
+                document.getElementById("user_email_display").innerText = localEmail;
+            }
+
+            try {
+                const response = await fetch("/api/user/profile?token=" + token);
+                const data = await response.json();
+                if (data.email) {
+                    document.getElementById("user_email_display").innerText = data.email;
+                    localStorage.setItem("user_email", data.email); // Sync
+                }
+            } catch (e) {
+                console.error("Profile fetch error:", e);
+            }
+        }
+        loadUserProfile();
+
+        // --- State ---
+        let currentWorkflowId = null;
+        let workflowSteps = [];
+        let availableColumns = {}; // Cache for sheet columns per step index
+
+        // --- Init ---
+        document.addEventListener("DOMContentLoaded", () => {
+            fetchWorkflows();
+        });
+
+        // --- View Switching ---
+        function showListView() {
+            document.getElementById("view_list").classList.remove("hidden");
+            document.getElementById("view_editor").classList.add("hidden");
+
+            document.getElementById("create_btn").classList.remove("hidden");
+            document.getElementById("save_btn").classList.add("hidden");
+            document.getElementById("back_btn").classList.add("hidden");
+
+            fetchWorkflows(); // Refresh list
+        }
+
+        function showEditorView(isNew = false) {
+            document.getElementById("view_list").classList.add("hidden");
+            document.getElementById("view_editor").classList.remove("hidden");
+
+            document.getElementById("create_btn").classList.add("hidden");
+            document.getElementById("save_btn").classList.remove("hidden");
+            document.getElementById("back_btn").classList.remove("hidden");
+
+            if (isNew) {
+                document.getElementById("delete_workflow_container").classList.add("hidden");
+            } else {
+                document.getElementById("delete_workflow_container").classList.remove("hidden");
+            }
+        }
+
+        // --- API: List Workflows ---
+        async function fetchWorkflows() {
+            const grid = document.getElementById("workflows_grid");
+            const loading = document.getElementById("loading_list");
+            const empty = document.getElementById("empty_list");
+
+            grid.innerHTML = "";
+            loading.classList.remove("hidden");
+            empty.classList.add("hidden");
+            grid.classList.add("hidden");
+
+            try {
+                const response = await fetch('/api/workflows', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+
+                loading.classList.add("hidden");
+
+                if (data.status === 'success' && data.workflows.length > 0) {
+                    grid.classList.remove("hidden");
+                    renderWorkflowList(data.workflows);
+                } else {
+                    empty.classList.remove("hidden");
+                }
+            } catch (e) {
+                console.error(e);
+                loading.classList.add("hidden");
+                // Show error state?
+            }
+        }
+
+        function renderWorkflowList(workflows) {
+            const grid = document.getElementById("workflows_grid");
+            grid.innerHTML = "";
+
+            workflows.forEach(wf => {
+                const card = document.createElement("div");
+                card.className = "bg-white p-6 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-all cursor-pointer group relative";
+                card.onclick = () => loadWorkflow(wf.id);
+
+                const stepCount = wf.steps ? wf.steps.length : 0;
+
+                card.innerHTML = `
+                    <div class="flex justify-between items-start mb-4">
+                        <div class="p-3 bg-blue-50 text-blue-600 rounded-xl group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                            <i class="fa-solid fa-diagram-project text-xl"></i>
+                        </div>
+                        <span class="px-2 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full">Active</span>
+                    </div>
+                    <h3 class="text-lg font-bold text-gray-800 mb-1 line-clamp-1">${wf.name}</h3>
+                    <p class="text-sm text-gray-400 mb-4 line-clamp-2">${wf.description || "No description"}</p>
+                    
+                    <div class="flex items-center gap-4 text-xs text-gray-500 border-t border-gray-100 pt-4">
+                        <div class="flex items-center gap-1">
+                            <i class="fa-solid fa-layer-group"></i> ${stepCount} Steps
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <i class="fa-solid fa-phone"></i> ${wf.trigger_config?.run_on || 'Any'}
+                        </div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        // --- Logic: Create/Load ---
+        function createNewWorkflow() {
+            currentWorkflowId = null;
+            workflowSteps = [];
+            document.getElementById("workflow_name").value = "New Workflow";
+            document.getElementById("trigger_filter").value = "any";
+            renderStack();
+            showEditorView(true);
+        }
+
+        async function loadWorkflow(id) {
+            try {
+                const response = await fetch(`/api/workflows/${id}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+
+                if (data.status === 'success' && data.workflow) {
+                    const wf = data.workflow;
+                    currentWorkflowId = wf.id;
+                    document.getElementById("workflow_name").value = wf.name;
+                    // Fix trigger config loading
+                    // wf.trigger_config might be string or obj depending on DB
+                    let tConfig = wf.trigger_config;
+                    // if(typeof tConfig === 'string') tConfig = JSON.parse(tConfig);
+
+                    document.getElementById("trigger_filter").value = tConfig?.run_on || 'any';
+
+                    workflowSteps = wf.steps || [];
+                    renderStack();
+                    showEditorView(false);
+
+                    // Re-hydrate UI for sheets (restore selectors)
+                    // We need to wait for renderStack, then populate selectors
+                    // This is tricky because loadSheets is async. 
+                    // Simple hack: Loop through steps and if 'sheets', call loadSheets then set value.
+                    restoreSheetSelectors();
+                }
+            } catch (e) {
+                console.error(e);
+                alert("Failed to load workflow");
+            }
+        }
+
+        async function restoreSheetSelectors() {
+            for (let i = 0; i < workflowSteps.length; i++) {
+                const step = workflowSteps[i];
+                if (step.type === 'sheets') {
+                    await loadSheets(i); // Fetch list of spreadsheets
+
+                    const select = document.getElementById(`sheet_selector_${i}`);
+                    if (select && step.sheet_id) {
+                        select.value = step.sheet_id;
+                        // Load and render columns (renderColumnList will handle internal state check)
+                        await loadColumns(i, step.sheet_id);
+
+                        // Restore Lookup Column selection
+                        const lookupSelect = document.getElementById(`lookup_column_${i}`);
+                        if (lookupSelect && step.lookup_config?.column) {
+                            lookupSelect.value = step.lookup_config.column;
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- Logic: Save ---
+        async function saveWorkflow() {
+            const btn = document.getElementById("save_btn");
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+            btn.disabled = true;
+
+            const name = document.getElementById("workflow_name").value;
+            const triggerRunOn = document.getElementById("trigger_filter").value;
+
+            const payload = {
+                id: currentWorkflowId, // Include ID for upsert
+                name: name,
+                trigger_type: 'call_ended',
+                trigger_config: {
+                    run_on: triggerRunOn
+                },
+                steps: workflowSteps.map(step => ({
+                    ...step,
+                    // Ensure smart_instruction is passed if present
+                    smart_instruction: step.smart_instruction
+                })),
+                is_active: true
+            };
+
+            try {
+                const response = await fetch('/api/workflows/save', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.status === 'success') {
+                    btn.innerHTML = '<i class="fa-solid fa-check"></i> Saved!';
+                    if (data.workflow && data.workflow.id) {
+                        currentWorkflowId = data.workflow.id; // Update ID if new
+                        document.getElementById("delete_workflow_container").classList.remove("hidden");
+                    }
+                    setTimeout(() => {
+                        btn.innerHTML = originalHtml;
+                        btn.disabled = false;
+                    }, 2000);
+                } else {
+                    throw new Error(data.message || "Failed");
+                }
+            } catch (e) {
+                console.error(e);
+                btn.innerHTML = '<i class="fa-solid fa-exclamation-triangle"></i> Error';
+                setTimeout(() => {
+                    btn.innerHTML = originalHtml;
+                    btn.disabled = false;
+                }, 2000);
+            }
+        }
+
+        async function deleteCurrentWorkflow() {
+            if (!currentWorkflowId) return;
+            if (!confirm("Are you sure you want to delete this workflow?")) return;
+
+            try {
+                const response = await fetch(`/api/workflows/${currentWorkflowId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.ok) {
+                    showListView();
+                } else {
+                    alert("Failed to delete");
+                }
+            } catch (e) {
+                console.error(e);
+                alert("Error deleting workflow");
+            }
+        }
+
+        // --- Existing JS Checks ---
+        // (Copied largely from old file but updated for new structure)
+
+        function renderStack() {
+            const container = document.getElementById("workflow_stack");
+            container.innerHTML = "";
+
+            workflowSteps.forEach((step, index) => {
+                const el = document.createElement("div");
+                el.className = "animation-fade-in-up";
+
+                let configHtml = "";
+                if (step.type === 'sheets') {
+                    const category = step.operation_category || 'write';
+                    const mode = step.update_mode || 'upsert';
+                    const mapping_mode = step.mapping_mode || 'manual';
+                    configHtml = `
+                        <div class="mt-4 space-y-4">
+                            <!-- 1. Select Spreadsheet -->
+                            <div class="space-y-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                <div class="flex items-center justify-between mb-1">
+                                    <label class="text-[10px] font-bold text-gray-500 uppercase">1. Select Destination Sheet</label>
+                                    <button type="button" onclick="loadSheets(${index})" class="text-[10px] text-blue-500 hover:text-blue-700 font-bold uppercase transition">
+                                        <i class="fa-solid fa-sync mr-1"></i> Refresh
+                                    </button>
+                                </div>
+                                <select id="sheet_selector_${index}" class="w-full bg-white border border-gray-200 text-[11px] rounded-md block p-2 focus:ring-1 focus:ring-green-500 shadow-sm" onchange="updateStepSheet(${index}, this.value)">
+                                    <option value="">Select Spreadsheet...</option>
+                                </select>
+                            </div>
+
+                            <!-- 2. Smart Instruction -->
+                            <div>
+                                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
+                                    <i class="fa-solid fa-wand-magic-sparkles text-purple-600 mr-1"></i> 2. Automation Instruction
+                                </label>
+                                <textarea id="smart_instruction_${index}" 
+                                    class="w-full bg-white border border-gray-300 text-sm rounded-lg p-3 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 shadow-sm min-h-[100px]"
+                                    placeholder="E.g., Check if the caller exists by phone number. If they do, update their Status to 'Interested'. If not, add a new row with their Name, Phone, and Summary."
+                                    onchange="updateStepInstruction(${index}, this.value)">${step.smart_instruction || ''}</textarea>
+                                <p class="text-[10px] text-gray-500 mt-2">
+                                    <i class="fa-solid fa-info-circle mr-1"></i> The AI will read your instruction and the sheet headers to decide whether to Update, Append, or Skip, and how to map the data.
+                                </p>
+                            </div>
+                        </div>
+                    `;
+                }
+                else if (step.type === 'calendar') {
+                    configHtml = `
+                         <div class="mt-4 space-y-3">
+                             <div>
+                                 <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Calendar & Event Config</label>
+                                <div class="p-4 bg-yellow-50 text-yellow-800 text-sm rounded-lg">
+                                    Calendar configuration is currently global. This step acts as a placeholder to trigger the global calendar logic.
+                                </div>
+                             </div>
+                         </div>
+                    `;
+                }
+
+                el.innerHTML = `
+                    <div class="relative group">
+                        <div class="w-full bg-white rounded-2xl border border-gray-200 p-6 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden workflow-card">
+                            <!-- Delete Button -->
+                            <button type="button" onclick="removeStep(${index})" class="absolute top-4 right-4 text-gray-300 hover:text-red-500 transition-colors">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+
+                            <div class="absolute top-0 left-0 w-1.5 h-full ${getColor(step.type)}"></div>
+                            <div class="flex items-start gap-4">
+                                <div class="w-12 h-12 rounded-xl ${getBgColor(step.type)} ${getTextColor(step.type)} flex items-center justify-center text-xl shrink-0">
+                                    <i class="${getIcon(step.type)}"></i>
+                                </div>
+                                <div class="flex-1">
+                                    <h3 class="font-bold text-gray-900">${getTitle(step.type)}</h3>
+                                    <p class="text-sm text-gray-500 mt-1 mb-2">${step.summary || "Configure this action..."}</p>
+
+                                    <!-- Configuration View -->
+                                    <div class="p-4 bg-gray-50 rounded-xl border border-gray-100">
+                                        ${configHtml}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flow-line border-l-2 border-dashed border-gray-300"></div>
+                `;
+                container.appendChild(el);
+            });
+        }
+
+        function getColor(type) { return type === 'sheets' ? 'bg-green-500' : 'bg-blue-500'; }
+        function getBgColor(type) { return type === 'sheets' ? 'bg-green-50' : 'bg-blue-50'; }
+        function getTextColor(type) { return type === 'sheets' ? 'text-green-600' : 'text-blue-600'; }
+        function getIcon(type) { return type === 'sheets' ? 'fa-solid fa-table' : 'fa-solid fa-calendar-check'; }
+        function getTitle(type) { return type === 'sheets' ? 'Update Google Sheet' : 'Book Calendar Event'; }
+
+        function showActionMenu() { document.getElementById("action_modal").classList.remove("hidden"); }
+        function closeActionMenu() { document.getElementById("action_modal").classList.add("hidden"); }
+
+        function addAction(type) {
+            workflowSteps.push({
+                type: type,
+                summary: type === 'sheets' ? "Update customer row" : "Check/Book slot",
+                smart_instruction: type === 'sheets' ? '' : undefined
+            });
+            renderStack();
+
+            if (type === 'sheets') {
+                const index = workflowSteps.length - 1;
+                setTimeout(() => loadSheets(index), 100);
+            }
+            closeActionMenu();
+        }
+
+        function removeStep(index) {
+            if (confirm("Remove this step?")) {
+                workflowSteps.splice(index, 1);
+                renderStack();
+                // Restore logic might be needed for remaining steps if indices shift, 
+                // but since we render from state `workflowSteps`, and state captures `sheet_id` and `column_mapping`,
+                // the `restoreSheetSelectors` function logic needs to be robust. 
+                // Actually `renderStack` HTML generation loses the values.
+                // WE MUST RESTORE VALUES AFTER EVERY RENDER.
+                setTimeout(restoreSheetSelectors, 100);
+            }
+        }
+
+        // --- Sheet Helper Functions ---
+        async function loadSheets(index) {
+            const selector = document.getElementById(`sheet_selector_${index}`);
+            if (!selector) return;
+            selector.innerHTML = '<option>Loading...</option>';
+
+            try {
+                const response = await fetch('/api/sheets', { headers: { 'Authorization': `Bearer ${token}` } });
+                const data = await response.json();
+                selector.innerHTML = '<option value="">Select Spreadsheet...</option>';
+
+                if (data.files && data.files.length > 0) {
+                    data.files.forEach(file => {
+                        const opt = document.createElement("option");
+                        opt.value = file.id;
+                        opt.innerText = file.name;
+                        selector.appendChild(opt);
+                    });
+                }
+            } catch (e) {
+                console.error(e);
+                selector.innerHTML = '<option>Error loading sheets</option>';
+            }
+        }
+
+        async function loadColumns(index, sheetId) {
+            if (!sheetId) return;
+            // UPDATE MODEL
+            if (workflowSteps[index]) workflowSteps[index].sheet_id = sheetId;
+
+            const container = document.getElementById(`column_mapper_${index}`);
+            const list = document.getElementById(`columns_list_${index}`);
+            container.classList.remove("hidden");
+            list.innerHTML = '<div class="text-center py-4 text-gray-400 text-sm"><i class="fa-solid fa-spinner fa-spin mr-2"></i> Loading Columns...</div>';
+
+            try {
+                const response = await fetch(`/api/sheets/${sheetId}/columns`, { headers: { 'Authorization': `Bearer ${token}` } });
+                const data = await response.json();
+                if (data.status === 'success' && data.columns) {
+                    availableColumns[index] = data.columns;
+                    renderManualMapping(index);
+                    populateLookupDropdown(index, data.columns);
+                } else {
+                    list.innerHTML = `<div class="text-red-500 text-sm p-2">Error: ${data.message || "Could not load columns"}</div>`;
+                }
+            } catch (e) {
+                list.innerHTML = `<div class="text-red-500 text-sm p-2">Network Error loading columns</div>`;
+            }
+        }
+
+        function renderManualMapping(index) {
+            const list = document.getElementById(`columns_list_${index}`);
+            if (!list) return;
+            list.innerHTML = "";
+
+            const mapping = workflowSteps[index].column_mapping || {};
+            const columns = availableColumns[index] || [];
+
+            const entries = Object.entries(mapping);
+            if (entries.length === 0) {
+                list.innerHTML = `<p class="text-[10px] text-gray-400 italic p-3 text-center border border-dashed border-gray-200 rounded-lg bg-white">No columns mapped. Click "+ Add Mapping Row" to start.</p>`;
+                return;
+            }
+
+            entries.forEach(([col, instruction], rIdx) => {
+                const row = document.createElement("div");
+                row.className = "flex flex-col gap-2 p-3 bg-white border border-gray-200 rounded-lg shadow-sm relative group/row";
+
+                row.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <select onchange="updateMappingRow(${index}, '${col}', this.value, null)" class="flex-1 bg-gray-50 border border-gray-200 text-[11px] rounded p-1.5 focus:ring-1 focus:ring-indigo-400">
+                            <option value="">Select Column...</option>
+                            ${columns.map(c => `<option value="${c}" ${c === col ? 'selected' : ''}>${c}</option>`).join('')}
+                        </select>
+                        <button type="button" onclick="removeMappingRow(${index}, '${col}')" class="text-gray-300 hover:text-red-500 transition-colors">
+                            <i class="fa-solid fa-circle-xmark"></i>
+                        </button>
+                    </div>
+                    <div>
+                        <textarea 
+                            placeholder="AI Instruction: what to extract into this column?"
+                            class="w-full text-[11px] p-2 bg-gray-50 border border-gray-200 rounded-md focus:ring-1 focus:ring-indigo-400 min-h-[40px]"
+                            onchange="updateMappingRow(${index}, '${col}', '${col}', this.value)"
+                        >${instruction}</textarea>
+                    </div>
+                `;
+                list.appendChild(row);
+            });
+        }
+
+        function addMappingRow(index) {
+            if (!workflowSteps[index].column_mapping) workflowSteps[index].column_mapping = {};
+
+            // Generate a unique dummy key if needed, or just let them pick
+            // If they click "Add Mapping Row", we add an empty key if it doesn't exist
+            if (!workflowSteps[index].column_mapping.hasOwnProperty("")) {
+                workflowSteps[index].column_mapping[""] = "";
+            }
+            renderManualMapping(index);
+        }
+
+        function removeMappingRow(stepIdx, col) {
+            if (workflowSteps[stepIdx].column_mapping) {
+                delete workflowSteps[stepIdx].column_mapping[col];
+                renderManualMapping(stepIdx);
+            }
+        }
+
+        function updateMappingRow(stepIdx, oldCol, newCol, instruction) {
+            if (!workflowSteps[stepIdx].column_mapping) workflowSteps[stepIdx].column_mapping = {};
+
+            const currentInstr = instruction !== null ? instruction : (workflowSteps[stepIdx].column_mapping[oldCol] || "");
+
+            if (oldCol !== newCol) {
+                delete workflowSteps[stepIdx].column_mapping[oldCol];
+            }
+
+            workflowSteps[stepIdx].column_mapping[newCol] = currentInstr;
+
+            // If we changed the column name, we need to re-render to update the 'oldCol' reference in the HTML
+            if (oldCol !== newCol) {
+                renderManualMapping(stepIdx);
+            }
+        }
+
+        // --- Advanced Sheets Handlers ---
+        function updateStepCategory(index, cat) {
+            workflowSteps[index].operation_category = cat;
+            renderStack();
+            setTimeout(restoreSheetSelectors, 100);
+        }
+
+        function updateStepMode(index, mode) {
+            workflowSteps[index].update_mode = mode;
+            renderStack();
+            setTimeout(restoreSheetSelectors, 100);
+        }
+
+        function updateMappingMode(index, mode) {
+            workflowSteps[index].mapping_mode = mode;
+            renderStack();
+            setTimeout(restoreSheetSelectors, 100);
+        }
+
+        function updateStepField(index, key, value) {
+            workflowSteps[index][key] = value;
+        }
+
+        function updateReadConfig(index, key, value) {
+            if (!workflowSteps[index].read_config) workflowSteps[index].read_config = {};
+            workflowSteps[index].read_config[key] = value;
+        }
+
+        function updateLookupConfig(index, key, value) {
+            if (!workflowSteps[index].lookup_config) workflowSteps[index].lookup_config = {};
+            workflowSteps[index].lookup_config[key] = value;
+        }
+
+        function addRoutingRule(index) {
+            if (!workflowSteps[index].routing_rules) workflowSteps[index].routing_rules = [];
+            workflowSteps[index].routing_rules.push({
+                field: '',
+                operator: '==',
+                value: '',
+                target_tab: ''
+            });
+            renderStack();
+            setTimeout(restoreSheetSelectors, 100);
+        }
+
+        function addRoutingGroup(index) {
+            if (!workflowSteps[index].routing_rules) workflowSteps[index].routing_rules = [];
+            workflowSteps[index].routing_rules.push({
+                logic: 'AND',
+                conditions: [
+                    { field: '', operator: '==', value: '' }
+                ],
+                target_tab: ''
+            });
+            renderStack();
+            setTimeout(restoreSheetSelectors, 100);
+        }
+
+        function updateRoutingRule(stepIdx, ruleIdx, key, val) {
+            if (workflowSteps[stepIdx].routing_rules && workflowSteps[stepIdx].routing_rules[ruleIdx]) {
+                workflowSteps[stepIdx].routing_rules[ruleIdx][key] = val;
+            }
+        }
+
+        function updateNestedCondition(stepIdx, ruleIdx, condIdx, key, val) {
+            const rule = workflowSteps[stepIdx].routing_rules[ruleIdx];
+            if (rule && rule.conditions && rule.conditions[condIdx]) {
+                rule.conditions[condIdx][key] = val;
+            }
+        }
+
+        function addConditionToGroup(stepIdx, ruleIdx) {
+            const rule = workflowSteps[stepIdx].routing_rules[ruleIdx];
+            if (rule && rule.conditions) {
+                rule.conditions.push({ field: '', operator: '==', value: '' });
+                renderStack();
+            }
+        }
+
+        function removeConditionFromGroup(stepIdx, ruleIdx, condIdx) {
+            const rule = workflowSteps[stepIdx].routing_rules[ruleIdx];
+            if (rule && rule.conditions) {
+                rule.conditions.splice(condIdx, 1);
+                if (rule.conditions.length === 0) {
+                    workflowSteps[stepIdx].routing_rules.splice(ruleIdx, 1);
+                }
+                renderStack();
+            }
+        }
+
+        function removeRoutingRule(stepIdx, ruleIdx) {
+            if (workflowSteps[stepIdx].routing_rules) {
+                workflowSteps[stepIdx].routing_rules.splice(ruleIdx, 1);
+                renderStack();
+                setTimeout(restoreSheetSelectors, 100);
+            }
+        }
+
+        function populateLookupDropdown(index, columns) {
+            const selects = [
+                document.getElementById(`lookup_column_${index}`)
+            ];
+
+            selects.forEach(select => {
+                if (!select) return;
+                const category = workflowSteps[index].operation_category || 'write';
+                const currentVal = (category === 'read')
+                    ? (workflowSteps[index].read_config?.column || "")
+                    : (workflowSteps[index].lookup_config?.column || "");
+
+                select.innerHTML = `<option value="">${category === 'read' ? 'Auto (Use LLM)' : 'Default (Phone/Mobile)'}</option>`;
+                columns.forEach(col => {
+                    const opt = document.createElement("option");
+                    opt.value = col;
+                    opt.innerText = col;
+                    if (col === currentVal) opt.selected = true;
+                    select.appendChild(opt);
+                });
+            });
+        }
+
+        // --- NEW IMPL: Smart Sheets ---
+        function updateStepInstruction(index, text) {
+            workflowSteps[index].smart_instruction = text;
+        }
+
+        async function updateStepSheet(index, sheetId) {
+            workflowSteps[index].sheet_id = sheetId;
+            // No need to load columns for Smart Mode, but we can keep it if we want to support manual fallback later.
+            // For now, let's strictly use Smart Mode.
+            // However, the UI calls 'loadColumns' in some places. Let's redirect or ignore.
+        }
+
+    </script>
+</body>
+
+</html>

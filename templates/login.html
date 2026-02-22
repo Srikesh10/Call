@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - CCALL.AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            background-image: url('https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&q=80');
+            background-size: cover;
+            background-position: center;
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+        }
+    </style>
+</head>
+
+<body class="h-screen flex items-center justify-center">
+
+
+    <div class="glass-panel p-10 rounded-2xl w-96 max-w-full transform transition-all hover:scale-[1.01]">
+        <div class="text-center mb-8">
+            <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 mb-4">
+                <i class="fa-solid fa-layer-group text-3xl text-blue-600"></i>
+            </div>
+            <h2 class="text-3xl font-bold text-gray-800 tracking-tight">CCALL.AI</h2>
+            <p class="text-sm text-gray-500 mt-2">Sign in to your Agent Dashboard</p>
+        </div>
+
+        <div class="space-y-4">
+            <button onclick="signInWithGoogle()"
+                class="w-full bg-white hover:bg-gray-50 text-gray-700 font-semibold py-3.5 rounded-xl border border-gray-300 shadow-sm flex items-center justify-center gap-3 transition-all transform hover:-translate-y-0.5">
+                <img src="https://www.google.com/favicon.ico" alt="G" class="w-5 h-5">
+                Sign in with Google
+            </button>
+            <div id="error-msg" class="text-center text-sm text-red-600 hidden"></div>
+        </div>
+
+        <div class="text-center mt-6 text-xs text-gray-400">
+            Powered by Custom OAuth Integration
+        </div>
+    </div>
+
+    <!-- Supabase Auth -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        const supabaseUrl = 'https://zucqctoevjgarklljyuc.supabase.co';
+        const supabaseKey = 'sb_publishable_rZjyDpFpB--JOnLvUk2v0Q_toB2ydfO';
+        const _supabase = supabase.createClient(supabaseUrl, supabaseKey);
+
+        async function signInWithGoogle() {
+            // Use custom backend OAuth instead of Supabase OAuth
+            const baseUrl = window.location.origin;
+            const oauthUrl = `${baseUrl}/api/oauth/google`;
+            
+            // Open OAuth in popup for better UX
+            const popup = window.open(oauthUrl, 'google_oauth', 'width=500,height=600,scrollbars=yes');
+            
+            // Listen for success message from popup
+            window.addEventListener('message', function(event) {
+                if (event.data && event.data.type === 'google-connected') {
+                    popup.close();
+                    // Extract actual user information
+                    const userEmail = event.data.email || 'oauth_user@gmail.com';
+                    const userId = event.data.user_id || 'oauth_user';
+                    
+                    // Set session token with actual user info
+                    localStorage.setItem('supabase_token', 'oauth_success_token');
+                    localStorage.setItem('user_email', userEmail);
+                    localStorage.setItem('user_id', userId);
+                    
+                    console.log("[Login] OAuth success for user:", userEmail, userId);
+                    // Redirect to dashboard after successful OAuth
+                    window.location.href = '/dashboard';
+                }
+            });
+        }
+
+        window.onload = async function () {
+            // Check if already logged in
+            const token = localStorage.getItem('supabase_token');
+            if (token) {
+                window.location.href = '/dashboard';
+            }
+        };
+    </script>
+</body>
+
+</html>
