@@ -13,7 +13,6 @@ load_dotenv()
 GROQ_KEY = os.environ.get("GROQ_API_KEY")
 if not GROQ_KEY:
     print("[CRITICAL] GROQ_API_KEY missing from environment. Agent will fail.")
-
 import uvicorn
 import asyncio
 import json
@@ -2801,7 +2800,4 @@ async def delete_workflow(workflow_id: str, user: dict = Depends(get_current_use
 
 if __name__ == "__main__":
     import uvicorn
-    print(">>> SERVER VERSION: AUTO HANGUP ENABLED <<<")
-    # Clean up port if needed (Optional, but good for local dev)
-    # os.system("netstat -ano | findstr :8027 > nul && taskkill /F /IM python.exe > nul")
     uvicorn.run(app, host="0.0.0.0", port=8027, log_level="warning", access_log=False)

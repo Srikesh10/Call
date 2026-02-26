@@ -5,39 +5,14 @@ import time
 import asyncio
 import uuid
 import json
-from groq import AsyncGroq # Changed to Async
-from cartesia import AsyncCartesia
-from backend.supabase_client import supabase_adapter # Global Instance
-from datetime import datetime, timedelta
 import csv
 import io
-import re
+from datetime import datetime, timedelta
+from groq import AsyncGroq
+from cartesia import AsyncCartesia
+from backend.supabase_client import supabase_adapter
 
-# Configuration
-# GROQ_API_KEY = os.environ.get("GROQ_API_KEY") # Removed global constant
-# Removed global constant for security
-# VOICE_ID = "3b554273-4299-48b9-9aaf-eefd438e3941" # Indian Lady # Removed global constant
-# SYSTEM_INSTRUCTION = """You are a sales assistant for a Premium Car Dealership in India. # Removed global constant
 
-# PROTOCOL:
-# 1. FIRST, check if the user has selected a language. If not, ASK THEM: "Namaste! Which language do you prefer? English, Hindi, Telugu, or Tamil?"
-# 2. ONCE they select a language, IMMEDIATELY switch to that language:
-#    - **IF HINDI**: Say "Swagat hai! Kaisi car chahiye?"
-#    - **IF TELUGU**: Say "Namaskaram! Ma showroom ki swagatham. Elanti car kavali?"
-#    - **IF TAMIL**: Say "Vanakkam! Vandi vangalama?"
-#    - **IF ENGLISH**: Say "Welcome! How can I help?"
-#    - **IF ANY OTHER LANGUAGE**: Say "Welcome" (in that language) AND IMMEDIATELY Ask: "Which car are you looking for?" (Dealership Script Mandatory).
-#    - Then speak ONLY in that language for the rest of the chat.
-# 3. STRICT RULE: Even if the user speaks English later, DO NOT switch to English. Reply in the selected language.
-
-# Examples:
-# - User: "Hi" -> You: "Namaste! Which language? English, Hindi, Telugu?"
-# - User (Telugu): "Rate entha?" -> You: "Deeni rate ₹6 Lakhs sir. EMI kuda undi." (Colloquial)
-# - User (Hindi): "Price?" -> You: "Iska price ₹6 Lakh hai sir."
-
-# Rule: Keep answers short. Use simple words.
-# FOR TELUGU: Use spoken Telangana/AP slang (Vyavaharika). DO NOT use formal book words like "Dhara" or "Vahanam". Use "Rate" and "Car".
-# NEVER switch languages once selected.""" # Removed global constant
 
 MANDATORY_INSTRUCTIONS = "\n\n[CRITICAL]: When your conversation objective is met (e.g., booking confirmed, question answered, or you have collected the required information) or the user says goodbye, you MUST call the `end_call` tool IMMEDIATELY in that same turn. Do not say goodbye and wait for a response. The call must be cut immediately after your final information is provided."
 
@@ -59,41 +34,20 @@ class GroqAgent:
             # Fallback (mostly for local testing without server injection)
             self.config = {}
         
-        # PRIORITIZE .env/Environment Variable for Cartesia (Avoid Collision with Stale DB Settings)
-        cartesia_key = os.environ.get("CARTESIA_API_KEY")
-        
+        # Cartesia API key: prefer .env, fallback to user config
+        cartesia_key = os.environ.get("CARTESIA_API_KEY") or self.config.get("cartesia_api_key")
         if not cartesia_key:
-            # Fallback to DB/Config only if env var is missing
-            cartesia_key = self.config.get("cartesia_api_key")
-        
-        if cartesia_key:
-            # DIAGNOSTIC: Print key fragment to verify source
-            key_frag = cartesia_key[-4:] if len(cartesia_key) > 4 else "****"
-            print(f"[AGENT] Cartesia Initialization... Key ending in: ...{key_frag}")
-        else:
-             print("[ERROR] No Cartesia API Key found in .env or Config!")
-            
+            print("[WARN] No Cartesia API Key found. TTS will be unavailable.")
+
         self.cartesia = AsyncCartesia(api_key=cartesia_key) if cartesia_key else None
         self.voice_id = self.config.get("voice_id")
-        # Validation: Check length, debug keyword, OR placeholder string
         if not self.voice_id or len(self.voice_id) < 10 or "debug" in self.voice_id or "cartesia_uuid" in self.voice_id:
-            print("[WARN] Invalid or Missing Voice ID. using Fallback.")
-            
-            # DEBUG: Print Key Fragment
-            key_frag = cartesia_key[-6:] if cartesia_key and len(cartesia_key) > 6 else "UNKNOWN"
-            print(f"[DEBUG] Cartesia Key Active: ...{key_frag}")
-            
-            self.voice_id = "bec003e2-3cb3-429c-8468-206a393c67ad" # User Request
-
-        print(f"[INIT] Final Voice ID: {self.voice_id}")
+            self.voice_id = "bec003e2-3cb3-429c-8468-206a393c67ad"
         self.system_instruction = self.config.get("system_instruction") or "You are a helpful AI assistant."
         
         self.automation_rules = automation_rules or []
         
-        # Load Inventory (RAG) - DISABLED for now
-        # inventory_context = self.db.get_inventory()
-        # if inventory_context:
-        #    self.system_instruction += f"\n\nINVENTORY DATA:\n{inventory_context}"
+
 
         # CALENDAR TOGGLE LOGIC
         if not enable_calendar:
@@ -136,32 +90,16 @@ You: (Call Tool: book_test_drive(customer_name='Rahul', ...))
 
         # NOTE: Automation Rules are NO LONGER injected into the Conversational Prompt.
         
-        # CRITICAL: Append End Call Instruction
+        # Append mandatory call termination instructions (cannot be overwritten by custom prompts)
         self._append_mandatory_instructions()
-        # They are applied in post-call analysis to prevent premature triggers.
+
+        self.model_stt = "whisper-large-v3-turbo"
+        self.model_llm = "llama-3.3-70b-versatile"
+        self.history = []
         
-        self.model_stt = "whisper-large-v3-turbo" # Multilingual Turbo Model
-        # self.model_llm = "llama-3.1-8b-instant" 
-        # self.model_llm = "llama-3.1-8b-instant" 
-        self.model_llm = "llama-3.3-70b-versatile" # User Requested Revert to 70B
-        self.history = [] # Conversation History Buffer
-        
-        # Store Google OAuth tokens for calendar operations
-        # Priority: 1) config['google_tokens'] (from WebSocket path)
-        #           2) user_token parameter (from Twilio path)
+        # Google OAuth tokens: prefer config (WebSocket path) over user_token param (Twilio path)
         self.google_tokens = self.config.get('google_tokens') or self.user_token
         self.enable_calendar = enable_calendar
-        
-        # DEBUG: Print token status
-        print(f"[INIT] Calendar enabled param: {enable_calendar}")
-        if self.google_tokens:
-            token_source = "config" if self.config.get('google_tokens') else "user_token"
-            if isinstance(self.google_tokens, dict):
-                 print(f"[INIT] Google Tokens Present (from {token_source}): {list(self.google_tokens.keys())}")
-            else:
-                 print(f"[INIT] Google Tokens Present (from {token_source}): <String/Other Type>")
-        else:
-            print(f"[INIT] Google Tokens: MISSING/NONE - Calendar tools will fail!")
         
         # Define function tools for Groq API
         self.tools = []

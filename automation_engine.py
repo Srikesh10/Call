@@ -720,11 +720,6 @@ async def execute_workflow(transcript: str, rule: dict, automation_data: dict, p
     supabase_adapter.update_call_analysis(call_id, "completed", json_lib.dumps(analysis_result))
     print(f"[AUTO] Analysis complete for Call {call_id}")
 
-# --- SERVICE PROCESSING FUNCTIONS ---
-
-# LEGACY SERVICE HANDLERS REMOVED
-
-
 
 
 async def list_google_sheets(access_token: str) -> list:
@@ -848,23 +843,20 @@ async def read_google_sheets_structure(sheet_id: str, access_token: str) -> dict
         print(f"[AUTO] Exception reading sheet structure: {e}")
         return {"error": str(e)}
 
-# --- HELPER FUNCTIONS ---
+
 
 async def get_google_access_token(google_tokens: dict) -> str:
-    """Get fresh Google access token using refresh token"""
-    print(f"[TOKEN] get_google_access_token called with: {list(google_tokens.keys()) if google_tokens else 'None'}")
-    
+    """Get fresh Google access token using refresh token."""
     if not google_tokens or not google_tokens.get("refresh_token"):
-        print("[TOKEN] ERROR: No refresh_token found in google_tokens")
         return None
-    
+
     try:
         from google.oauth2.credentials import Credentials
         from google.auth.transport.requests import Request
         from auth_config import CLIENT_ID, CLIENT_SECRET, TOKEN_URI
         
-        print(f"[TOKEN] Using refresh_token: {google_tokens['refresh_token'][:20]}...")
-        
+        print(f"[TOKEN] Using refresh_token (from config)")
+
         creds = Credentials(
             token=None,
             refresh_token=google_tokens["refresh_token"],
@@ -875,16 +867,13 @@ async def get_google_access_token(google_tokens: dict) -> str:
         )
         
         creds.refresh(Request())
-        print(f"[TOKEN] Successfully obtained access_token: {creds.token[:20]}...")
         return creds.token
-        
+
     except Exception as e:
-        print(f"[TOKEN] ERROR refreshing Google token: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"[TOKEN] Error refreshing Google token: {e}")
         return None
 
-# --- ANALYSIS FUNCTIONS ---
+
 
 async def analyze_transcript_for_sheets(transcript: str, rule: dict, automation_data: dict, sheet_structure: dict = None) -> dict:
     """Analyze transcript for Google Sheets data extraction with sheet context"""
@@ -1307,104 +1296,62 @@ def check_availability(requested_start: str, requested_end: str, existing_events
         return {"available": True, "conflicts": [], "message": "Unable to verify - proceeding"}
 
 async def create_google_calendar_event(event: dict, access_token: str) -> dict:
-    """Create event in Google Calendar"""
+    """Create event in Google Calendar."""
     import httpx
-    
-    print(f"[CALENDAR API] Creating event: {event.get('summary', 'N/A')}")
-    print(f"[CALENDAR API] Access token: {access_token[:20] if access_token else 'None'}...")
-    
     try:
         url = "https://www.googleapis.com/calendar/v3/calendars/primary/events"
-        
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 url,
                 json=event,
-                headers={
-                    "Authorization": f"Bearer {access_token}",
-                    "Content-Type": "application/json"
-                }
+                headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
             )
-            
-            print(f"[CALENDAR API] Response status: {response.status_code}")
-            
             if response.status_code == 200:
                 result = response.json()
-                print(f"[CALENDAR API] SUCCESS! Event ID: {result.get('id')}")
-                print(f"[CALENDAR API] Event Link: {result.get('htmlLink')}")
+                print(f"[CALENDAR] Event created: {result.get('id')}")
                 return {"success": True, "event_id": result.get("id"), "link": result.get("htmlLink")}
             else:
-                print(f"[CALENDAR API] FAILED: {response.text}")
+                print(f"[CALENDAR] Create event failed: {response.status_code}")
                 return {"success": False, "error": response.text}
-                
     except Exception as e:
-        print(f"[CALENDAR API] Exception: {e}")
+        print(f"[CALENDAR] Create event exception: {e}")
         return {"success": False, "error": str(e)}
 
 async def update_google_calendar_event(event_id: str, event_updates: dict, access_token: str) -> dict:
-    """Update an existing event in Google Calendar"""
+    """Update an existing event in Google Calendar."""
     import httpx
-    
-    print(f"[CALENDAR API] Updating event: {event_id}")
-    print(f"[CALENDAR API] New details: {event_updates.get('summary', 'N/A')}")
-    
     try:
         url = f"https://www.googleapis.com/calendar/v3/calendars/primary/events/{event_id}"
-        
         async with httpx.AsyncClient() as client:
             response = await client.patch(
                 url,
                 json=event_updates,
-                headers={
-                    "Authorization": f"Bearer {access_token}",
-                    "Content-Type": "application/json"
-                }
+                headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
             )
-            
-            print(f"[CALENDAR API] Update Response status: {response.status_code}")
-            
             if response.status_code == 200:
                 result = response.json()
-                print(f"[CALENDAR API] UPDATE SUCCESS! Event ID: {result.get('id')}")
-                print(f"[CALENDAR API] Event Link: {result.get('htmlLink')}")
                 return {"success": True, "event_id": result.get("id"), "link": result.get("htmlLink"), "updated": True}
             else:
-                print(f"[CALENDAR API] UPDATE FAILED: {response.text}")
+                print(f"[CALENDAR] Update event failed: {response.status_code}")
                 return {"success": False, "error": response.text}
-                
     except Exception as e:
-        print(f"[CALENDAR API] Update Exception: {e}")
+        print(f"[CALENDAR] Update event exception: {e}")
         return {"success": False, "error": str(e)}
 
 async def delete_google_calendar_event(event_id: str, access_token: str) -> dict:
-    """Delete an event from Google Calendar"""
+    """Delete an event from Google Calendar."""
     import httpx
-    
-    print(f"[CALENDAR API] Deleting event: {event_id}")
-    
     try:
         url = f"https://www.googleapis.com/calendar/v3/calendars/primary/events/{event_id}"
-        
         async with httpx.AsyncClient() as client:
-            response = await client.delete(
-                url,
-                headers={
-                    "Authorization": f"Bearer {access_token}"
-                }
-            )
-            
-            print(f"[CALENDAR API] Delete Response status: {response.status_code}")
-            
-            # 204 No Content = successful deletion
+            response = await client.delete(url, headers={"Authorization": f"Bearer {access_token}"})
             if response.status_code in [200, 204]:
-                print(f"[CALENDAR API] DELETE SUCCESS! Event {event_id} removed")
                 return {"success": True, "event_id": event_id, "deleted": True}
             else:
-                print(f"[CALENDAR API] DELETE FAILED: {response.text}")
+                print(f"[CALENDAR] Delete event failed: {response.status_code}")
                 return {"success": False, "error": response.text}
-                
     except Exception as e:
-        print(f"[CALENDAR API] Delete Exception: {e}")
+        print(f"[CALENDAR] Delete event exception: {e}")
         return {"success": False, "error": str(e)}
 
 async def get_upcoming_bookings(access_token: str, max_results: int = 10) -> list:
