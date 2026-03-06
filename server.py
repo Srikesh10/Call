@@ -358,10 +358,12 @@ async def make_outbound_call(call_req: MakeCallRequest, request: Request, user: 
         print(f"[DEBUG] Call Request System Prompt: '{call_req.system_prompt}'")
         print(f"[DEBUG] Call Request Context: {call_req.context}")
         
-        # Dynamic Host for TwiML
-        host = request.headers.get("host", "tinselly-incompliant-earlean.ngrok-free.dev")
-        proto = "https" if "localhost" not in host else "http"
-        base_url = f"{proto}://{host}"
+        # Dynamic Host for TwiML — prefer BASE_URL env var, fallback to request host
+        base_url = os.environ.get("BASE_URL", "").rstrip("/")
+        if not base_url:
+            host = request.headers.get("host", "tinselly-incompliant-earlean.ngrok-free.dev")
+            proto = "https" if "localhost" not in host else "http"
+            base_url = f"{proto}://{host}"
         
         # Encode Context for URL
         import urllib.parse
@@ -727,11 +729,13 @@ async def twilio_incoming(request: Request):
     Handle incoming calls from Twilio.
     Returns TwiML to connect to the Media Stream.
     """
-    # Dynamic Host for TwiML (uses the incoming request's host or hardcoded ngrok)
-    host = request.headers.get("host", "tinselly-incompliant-earlean.ngrok-free.dev")
-    
-    # WebSocket URL
-    ws_url = f"wss://{host}/twilio/ws"
+    # WebSocket URL — prefer BASE_URL env var, fallback to request host
+    _base = os.environ.get("BASE_URL", "").rstrip("/")
+    if _base:
+        ws_url = _base.replace("https://", "wss://").replace("http://", "ws://") + "/twilio/ws"
+    else:
+        host = request.headers.get("host", "tinselly-incompliant-earlean.ngrok-free.dev")
+        ws_url = f"wss://{host}/twilio/ws"
     
     print(f"[TWILIO INCOMING] Query Params: {request.query_params}") # DEBUG
     

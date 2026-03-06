@@ -27,3 +27,9 @@ DB.sql
 config.json.bak
 test_*.py
 !test_advanced_conditioning.py
+
+# ngrok and local dev artifacts
+ngrok.exe
+ngrok.zip
+ngrok_output.txt
+server_logs.txt
