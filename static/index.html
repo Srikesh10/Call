@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Alora AI — Next Generation Voice Agents</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Inter:wght@400;500&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg: #050508;
+      --surface: #0a0a10;
+      --card: #12121c;
+      --border: rgba(255, 255, 255, 0.08);
+      --border-glow: rgba(124, 92, 252, 0.3);
+      --accent: #7c5cfc;
+      --accent-hover: #9b82fd;
+      --accent-gradient: linear-gradient(135deg, #7c5cfc, #d946ef);
+      --text: #f8fafc;
+      --muted: #94a3b8;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      overflow-x: hidden;
+      line-height: 1.6;
+    }
+
+    /* Background Ambient Gradients */
+    .ambient-glow {
+      position: fixed;
+      width: 800px;
+      height: 800px;
+      background: radial-gradient(circle, rgba(124,92,252,0.15) 0%, transparent 60%);
+      top: -200px;
+      left: 50%;
+      transform: translateX(-50%);
+      pointer-events: none;
+      z-index: -1;
+      filter: blur(60px);
+    }
+    
+    .ambient-glow-2 {
+      position: fixed;
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, rgba(217,70,239,0.1) 0%, transparent 60%);
+      bottom: -100px;
+      right: -100px;
+      pointer-events: none;
+      z-index: -1;
+      filter: blur(80px);
+    }
+
+    /* Navigation */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      padding: 24px 8%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 100;
+      background: rgba(5, 5, 8, 0.7);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .logo {
+      font-family: 'Outfit', sans-serif;
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -1px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: var(--text);
+    }
+
+    .logo-icon {
+      background: var(--accent-gradient);
+      background-clip: text;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      font-size: 32px;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 32px;
+      align-items: center;
+    }
+
+    .nav-links a {
+      color: var(--muted);
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 15px;
+      transition: color 0.3s ease;
+    }
+
+    .nav-links a:hover {
+      color: var(--text);
+    }
+
+    .btn-nav {
+      background: var(--text);
+      color: var(--bg);
+      padding: 10px 24px;
+      border-radius: 100px;
+      font-weight: 600;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .btn-nav:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px rgba(255,255,255,0.15);
+      color: var(--bg);
+    }
+
+    /* Hero Section */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 120px 20px 60px;
+    }
+
+    .hero-badge {
+      background: rgba(124, 92, 252, 0.1);
+      border: 1px solid var(--border-glow);
+      color: var(--accent-hover);
+      padding: 8px 16px;
+      border-radius: 100px;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      margin-bottom: 24px;
+      animation: fadeUp 0.8s ease-out;
+    }
+
+    .hero h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: clamp(48px, 8vw, 84px);
+      font-weight: 800;
+      line-height: 1.1;
+      letter-spacing: -2px;
+      margin-bottom: 24px;
+      max-width: 900px;
+      animation: fadeUp 1s ease-out 0.1s backwards;
+    }
+
+    .text-gradient {
+      background: var(--accent-gradient);
+      background-clip: text;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero p {
+      font-size: clamp(18px, 2vw, 22px);
+      color: var(--muted);
+      max-width: 600px;
+      margin-bottom: 48px;
+      animation: fadeUp 1s ease-out 0.2s backwards;
+    }
+
+    .hero-cta {
+      display: flex;
+      gap: 20px;
+      animation: fadeUp 1s ease-out 0.3s backwards;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .btn-primary {
+      background: var(--accent-gradient);
+      color: #fff;
+      padding: 18px 40px;
+      border-radius: 100px;
+      font-size: 16px;
+      font-weight: 600;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      transition: all 0.3s ease;
+      border: none;
+      cursor: pointer;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-3px) scale(1.02);
+      box-shadow: 0 20px 40px rgba(124, 92, 252, 0.4);
+    }
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--text);
+      padding: 18px 40px;
+      border-radius: 100px;
+      font-size: 16px;
+      font-weight: 600;
+      text-decoration: none;
+      border: 1px solid var(--border);
+      transition: all 0.3s ease;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(255,255,255,0.2);
+    }
+
+    /* Features Dashboard Preview */
+    .dashboard-preview {
+      width: 100%;
+      max-width: 1100px;
+      margin: 60px auto 0;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 12px;
+      box-shadow: 0 30px 100px rgba(0,0,0,0.6), 0 0 0 1px rgba(124,92,252,0.1);
+      animation: floatUp 1.5s ease-out 0.5s backwards;
+      position: relative;
+    }
+
+    .dashboard-inner {
+      background: var(--surface);
+      border-radius: 16px;
+      height: 400px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--border);
+      overflow: hidden;
+      position: relative;
+    }
+    
+    .dashboard-inner::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: linear-gradient(180deg, transparent 0%, var(--surface) 100%);
+      z-index: 10;
+    }
+
+    .mock-ui {
+      display: flex;
+      gap: 20px;
+      width: 80%;
+      opacity: 0.6;
+    }
+
+    .mock-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .mock-box {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      height: 80px;
+    }
+    .mock-box.large { height: 180px; }
+
+    /* Features Grid */
+    .features {
+      padding: 100px 8%;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .section-header {
+      text-align: center;
+      margin-bottom: 80px;
+    }
+
+    .section-header h2 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 42px;
+      margin-bottom: 16px;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 32px;
+    }
+
+    .feature-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      padding: 40px;
+      border-radius: 24px;
+      transition: all 0.4s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .feature-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--border-glow), transparent);
+      opacity: 0;
+      transition: opacity 0.4s ease;
+    }
+
+    .feature-card:hover {
+      transform: translateY(-8px);
+      box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+      border-color: rgba(124, 92, 252, 0.3);
+    }
+
+    .feature-card:hover::before {
+      opacity: 1;
+    }
+
+    .feature-icon {
+      font-size: 40px;
+      margin-bottom: 24px;
+      display: inline-block;
+      background: var(--surface);
+      width: 72px; height: 72px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 18px;
+      border: 1px solid var(--border);
+    }
+
+    .feature-card h3 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 24px;
+      margin-bottom: 16px;
+    }
+
+    .feature-card p {
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.7;
+    }
+
+    /* Animations */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes floatUp {
+      from { opacity: 0; transform: translateY(60px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      nav { padding: 20px; }
+      .nav-links { display: none; } /* Hide links on mobile for simplicity */
+      .hero { padding-top: 140px; }
+      .features { padding: 60px 20px; }
+      .dashboard-preview { margin-top: 40px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="ambient-glow"></div>
+  <div class="ambient-glow-2"></div>
+
+  <nav>
+    <a href="/" class="logo">
+      <span class="logo-icon">✦</span>
+      Alora AI
+    </a>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#technology">Technology</a>
+      <a href="/console" class="btn-nav">Test Console</a>
+    </div>
+  </nav>
+
+  <section class="hero">
+    <div class="hero-badge">✦ Enterprise-Grade Architecture</div>
+    <h1>The world's most capable <br/><span class="text-gradient">AI Voice Agents</span>.</h1>
+    <p>Deploy multi-tenant conversational AI that sounds human, thinks instantly, and integrates seamlessly with your business workflows.</p>
+    
+    <div class="hero-cta">
+      <a href="/console" class="btn-primary">
+        Launch Test Console <span>→</span>
+      </a>
+      <a href="#features" class="btn-secondary">Explore Platform</a>
+    </div>
+
+    <div class="dashboard-preview">
+      <div class="dashboard-inner">
+        <div class="mock-ui">
+          <div class="mock-col">
+            <div class="mock-box"></div>
+            <div class="mock-box large"></div>
+            <div class="mock-box"></div>
+          </div>
+          <div class="mock-col">
+            <div class="mock-box large"></div>
+            <div class="mock-box"></div>
+            <div class="mock-box large"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="features" id="features">
+    <div class="section-header">
+      <h2>Engineered for Scale</h2>
+      <p style="color: var(--muted); font-size: 18px;">Built on a zero-trust, highly parallelized infrastructure.</p>
+    </div>
+
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">⚡️</div>
+        <h3>Ultra-Low Latency</h3>
+        <p>Powered by Groq's LPU inference engine and Cartesia Sonic TTS, delivering sub-300ms verbal response times that feel completely natural.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">🛡️</div>
+        <h3>Zero-Trust Security</h3>
+        <p>Enterprise-grade security with strict RBAC, separated tenant environments, structured error boundaries, and robust API signature validation.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">🧩</div>
+        <h3>Workflow Engine</h3>
+        <p>Connect voice intents to real-world actions. Seamlessly integrate with Google Calendar, Sheets, and internal CRMs to automate your operations post-call.</p>
+      </div>
+    </div>
+  </section>
+
+</body>
+</html>

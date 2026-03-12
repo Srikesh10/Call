@@ -18,7 +18,7 @@ import uvicorn
 import asyncio
 import json
 import base64
-import audioop
+import numpy as np
 import io
 import wave
 import time
@@ -26,10 +26,67 @@ import automation_engine  # NEW IMPORT - Now Safe
 import requests
 import urllib.parse
 import traceback
+import hmac
+import hashlib
+
+# ── Audio helpers (replaces deprecated audioop) ──────────────────────────────
+# audioop was removed in Python 3.13. These numpy functions do the same thing.
+
+def _ulaw2lin(ulaw_bytes: bytes) -> bytes:
+    """μ-law → 16-bit PCM. Equivalent to audioop.ulaw2lin(data, 2)."""
+    u = np.frombuffer(ulaw_bytes, dtype=np.uint8).astype(np.int16)
+    u = ~u
+    sign = (u & 0x80)
+    exp  = (u >> 4) & 0x07
+    mant = u & 0x0F
+    lin  = (mant << (exp + 3)) + (33 << exp) - 33
+    lin  = np.where(sign != 0, -lin, lin)
+    return lin.astype(np.int16).tobytes()
+
+def _lin2ulaw(pcm_bytes: bytes) -> bytes:
+    """16-bit PCM → μ-law. Equivalent to audioop.lin2ulaw(data, 2)."""
+    s = np.frombuffer(pcm_bytes, dtype=np.int16).astype(np.int32)
+    sign = np.where(s < 0, np.uint8(0x80), np.uint8(0)).astype(np.uint8)
+    s = np.minimum(np.abs(s), 32767) + 33
+    exp_lut = np.array([0,1,2,2,3,3,3,3,4,4,4,4,4,4,4,4,
+                        5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,
+                        6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,
+                        6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,
+                        7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,
+                        7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,
+                        7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,
+                        7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7], dtype=np.uint8)
+    idx  = np.minimum(s >> 7, 127).astype(np.uint8)
+    exp  = exp_lut[idx]
+    mant = ((s >> (exp.astype(np.int32) + 3)) & 0x0F).astype(np.uint8)
+    ulaw = (~(sign | (exp << 4) | mant)).astype(np.uint8)
+    return ulaw.tobytes()
+
+def _ratecv(pcm_bytes: bytes, in_rate: int, out_rate: int) -> bytes:
+    """Resample 16-bit mono PCM. Equivalent to audioop.ratecv(data,2,1,in_rate,out_rate,None)."""
+    if in_rate == out_rate or not pcm_bytes:
+        return pcm_bytes
+    samples = np.frombuffer(pcm_bytes, dtype=np.int16).astype(np.float32)
+    n_out   = int(len(samples) * out_rate / in_rate)
+    resampled = np.interp(
+        np.linspace(0, len(samples) - 1, n_out),
+        np.arange(len(samples)),
+        samples
+    ).astype(np.int16)
+    return resampled.tobytes()
+
+def _rms(pcm_bytes: bytes) -> int:
+    """RMS energy of 16-bit PCM. Equivalent to audioop.rms(data, 2)."""
+    if not pcm_bytes:
+        return 0
+    samples = np.frombuffer(pcm_bytes, dtype=np.int16).astype(np.float32)
+    return int(np.sqrt(np.mean(samples ** 2)))
+# ─────────────────────────────────────────────────────────────────────────────
 
 from fastapi import FastAPI, WebSocket, Request, Query, WebSocketDisconnect, UploadFile, File, Depends, Response, HTTPException, APIRouter
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from agent_groq import GroqAgent
 # from database_adapter import DBAdapter (Removed)
@@ -45,8 +102,72 @@ from backend.supabase_client import supabase # Direct DB Access
 
 app = FastAPI()
 
-# Include knowledge base routes
+# CORS — allow all origins so local UI and frontend can call the API
+from fastapi.middleware.cors import CORSMiddleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ── Rate Limiting ───────────────────────────────────────────────────────────────────────
+# Stop a single bad actor from burning your Twilio/Groq credits.
+# Limit: 20 call-initiation requests per minute per IP.
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
+_limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
+app.state.limiter = _limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+# ────────────────────────────────────────────────────────────────────────
+
+# ── Twilio Webhook Validator ──────────────────────────────────────────────
+# Twilio signs every webhook request. We verify the signature so only
+# real Twilio requests can trigger our call handling logic.
+# In DEBUG_MODE the check is skipped so local testing works without signing.
+_DEBUG_MODE = os.environ.get("DEBUG_MODE", "false").lower() == "true"
+_TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_MASTER_AUTH_TOKEN", "")
+
+def _validate_twilio_request(request: Request, form_data: dict) -> bool:
+    """Returns True if the request is a legitimate Twilio webhook."""
+    if _DEBUG_MODE:
+        return True  # Skip in local dev
+    try:
+        from twilio.request_validator import RequestValidator
+        validator = RequestValidator(_TWILIO_AUTH_TOKEN)
+        signature = request.headers.get("X-Twilio-Signature", "")
+        url = str(request.url)
+        return validator.validate(url, form_data, signature)
+    except Exception:
+        return False
+# ────────────────────────────────────────────────────────────────────────
+
 app.include_router(knowledge_router)
+
+# Serve static UI files
+import os as _os
+_static_dir = _os.path.join(_os.path.dirname(__file__), "static")
+if _os.path.isdir(_static_dir):
+    app.mount("/static", StaticFiles(directory=_static_dir), name="static")
+
+@app.get("/", response_class=HTMLResponse)
+async def serve_landing():
+    ui_path = _os.path.join(_static_dir, "index.html")
+    if _os.path.exists(ui_path):
+        with open(ui_path, "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
+    return HTMLResponse(content="<h1>Landing page not found</h1>", status_code=404)
+
+@app.get("/console", response_class=HTMLResponse)
+async def serve_console():
+    console_path = _os.path.join(_static_dir, "console.html")
+    if _os.path.exists(console_path):
+        with open(console_path, "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
+    return HTMLResponse(content="<h1>Console UI not found</h1>", status_code=404)
 
 # --- SUPABASE AUTH SETUP ---
 from backend.supabase_client import supabase, supabase_adapter  # GLOBAL IMPORT
@@ -346,6 +467,7 @@ async def list_twilio_numbers(user: dict = Depends(get_current_user)):
 
 # Make outbound call
 @app.post("/api/calls/make")
+@_limiter.limit("20/minute")
 async def make_outbound_call(call_req: MakeCallRequest, request: Request, user: dict = Depends(get_current_user)):
     """
     Initiate an outbound call using Twilio with context.
@@ -393,11 +515,12 @@ async def make_outbound_call(call_req: MakeCallRequest, request: Request, user: 
         
         prompt_encoded = urllib.parse.quote(system_prompt or "")
 
+        # Sanitize phone number — strip spaces (e.g. "+91 7569247122" → "+917569247122")
+        clean_to = call_req.to.replace(" ", "").replace("-", "")
+        phone_encoded = urllib.parse.quote(clean_to)
+
         # TwiML URL pointing to our incoming handler
-        # ADDED call_type=outbound to distinguish from inbound calls
-        # MOVED to front to avoid encoding issues with context/prompt
-        # ADDED phone param to carry the TO number
-        twiml_url = f"{base_url}/twilio/incoming?call_type=outbound&phone={call_req.to}&context={context_encoded}&prompt={prompt_encoded}"
+        twiml_url = f"{base_url}/twilio/incoming?call_type=outbound&phone={phone_encoded}&context={context_encoded}&prompt={prompt_encoded}"
         print(f"[OUTBOUND] Generated TwiML URL: {twiml_url}") # DEBUG
         
         call = client.calls.create(
@@ -725,6 +848,10 @@ from fastapi.responses import RedirectResponse
 @app.post("/twilio/incoming")
 async def twilio_incoming(request: Request):
     print(f"[TWILIO INCOMING] Hit received! Params: {request.query_params}")
+    # Verify this request is actually from Twilio (skip in DEBUG_MODE)
+    form_data = dict(await request.form())
+    if not _validate_twilio_request(request, form_data):
+        raise HTTPException(status_code=403, detail="Invalid Twilio signature")
     """
     Handle incoming calls from Twilio.
     Returns TwiML to connect to the Media Stream.
@@ -919,11 +1046,10 @@ async def twilio_ws_endpoint(websocket: WebSocket):
                             return
 
                     if audio_chunk:
-                        # Resample 24k (Agent) -> 8k (Twilio)
-                        audio_pcm_8k, _ = audioop.ratecv(audio_chunk, 2, 1, 24000, 8000, None)
-                        
-                        # Convert Agent Audio (PCM 8k) -> Mulaw 8k (8000 samples/sec)
-                        audio_mulaw_out = audioop.lin2ulaw(audio_pcm_8k, 2)
+                        # Resample 24k (Agent) → 8k (Twilio)
+                        audio_pcm_8k = _ratecv(audio_chunk, 24000, 8000)
+                        # Convert PCM 16-bit → μ-law (what Twilio expects)
+                        audio_mulaw_out = _lin2ulaw(audio_pcm_8k)
                         
                         # TRACK PLAYBACK TIME: 1 byte mulaw = 1 sample. 8000 samples = 1 second.
                         chunk_duration = len(audio_mulaw_out) / 8000.0
@@ -1388,12 +1514,12 @@ async def twilio_ws_endpoint(websocket: WebSocket):
                 payload_base64 = msg["media"]["payload"]
                 audio_mulaw = base64.b64decode(payload_base64)
                 
-                # Decode & Resample
-                audio_pcm_8k = audioop.ulaw2lin(audio_mulaw, 2)
-                audio_pcm_16k, _ = audioop.ratecv(audio_pcm_8k, 2, 1, 8000, 16000, None)
+                # Decode μ-law → PCM, then resample 8k → 16k for Groq STT
+                audio_pcm_8k = _ulaw2lin(audio_mulaw)
+                audio_pcm_16k = _ratecv(audio_pcm_8k, 8000, 16000)
                 
-                # Check RMS for Barge-In
-                rms = audioop.rms(audio_pcm_16k, 2)
+                # Check RMS for Barge-In (user talking while AI is speaking)
+                rms = _rms(audio_pcm_16k)
                 if rms > SILENCE_THRESHOLD:
                     # ** BARGE-IN TRIGGER **
                     if current_response_task and not current_response_task.done():

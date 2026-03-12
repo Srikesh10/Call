@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: alora-ai-core
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DEBUG_MODE
+        value: "false"
+      - key: PYTHON_VERSION
+        value: "3.12.0"

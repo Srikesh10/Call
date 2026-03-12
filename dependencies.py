@@ -1,26 +1,42 @@
+import os
 from fastapi import Depends, HTTPException, status, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from backend.supabase_client import supabase
 
 security = HTTPBearer()
 
-def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), 
-                     x_user_id: str = Header(default=None), 
-                     x_user_email: str = Header(default=None)):
-    """Verifies the Bearer Token using Supabase or OAuth success token"""
-    token = credentials.credentials
-    # DEBUG TOKEN
-    if not token or len(token) < 10:
-        print(f"[AUTH DEBUG] Invalid Token Received: {token}")
-    else:
-        print(f"[AUTH DEBUG] Verifying Token: {token[:10]}... (Length: {len(token)})")
+# DEBUG_MODE allows the test token only in local dev.
+# Set DEBUG_MODE=false in production .env to disable it completely.
+DEBUG_MODE = os.environ.get("DEBUG_MODE", "false").lower() == "true"
 
-    # Handle OAuth success token - get user info from headers
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security),
+                     x_user_id: str = Header(default=None),
+                     x_user_email: str = Header(default=None)):
+    """
+    Verifies the Bearer Token using Supabase JWT validation.
+
+    In DEBUG_MODE only: accepts 'oauth_success_token' as a test bypass.
+    Both x-user-id and x-user-email headers MUST be present — no hardcoded fallback.
+    In production (DEBUG_MODE=false): only real Supabase JWTs are accepted.
+    """
+    token = credentials.credentials
+
+    # ── TEST BYPASS (DEBUG_MODE only) ─────────────────────────────────────────
     if token == "oauth_success_token":
-        print("[AUTH DEBUG] OAuth Success Token Detected")
-        print(f"[AUTH DEBUG] OAuth User from headers: ID={x_user_id}, Email={x_user_email}")
-        
-        # Create a user object for OAuth users
+        if not DEBUG_MODE:
+            # Backdoor is disabled in production — reject immediately
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Test token not allowed in production."
+            )
+
+        # DEBUG_MODE: both headers required — no hardcoded fallback
+        if not x_user_id or not x_user_email:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Test token requires x-user-id and x-user-email headers."
+            )
+
         class OAuthUser:
             def __init__(self, user_id, email):
                 self.id = user_id
@@ -30,24 +46,17 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
                 self.app_metadata = {"provider": "google"}
                 self.user_metadata = {"provider": "google"}
                 self.created_at = "2025-01-01T00:00:00Z"
-        
-        if x_user_id and x_user_email:
-            return OAuthUser(x_user_id, x_user_email)
-        else:
-            # Fallback: Use known user ID (for dev/testing when headers not sent)
-            # In production, this should fetch from session or reject
-            print("[AUTH DEBUG] Using fallback user ID (headers missing)")
-            fallback_id = "655b1b48-66b6-4455-9a92-3fcac8c377eb"
-            fallback_email = "rahulsamineni1234@gmail.com"
-            return OAuthUser(fallback_id, fallback_email)
 
+        print(f"[AUTH] Debug user: {x_user_id} ({x_user_email})")
+        return OAuthUser(x_user_id, x_user_email)
+
+    # ── PRODUCTION: Supabase JWT validation ────────────────────────────────────
     try:
         user = supabase.auth.get_user(token)
         if not user:
-             raise HTTPException(status_code=401, detail="Invalid Supabase Token")
+            raise HTTPException(status_code=401, detail="Invalid token.")
         return user.user
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"[AUTH ERROR] Verification Failed: {e}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=401, detail=str(e))
+        raise HTTPException(status_code=401, detail="Authentication failed.")

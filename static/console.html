@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Alora AI — Test Console</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg: #0a0a0f;
+      --surface: #111118;
+      --card: #16161f;
+      --border: #ffffff12;
+      --accent: #7c5cfc;
+      --accent2: #a78bfa;
+      --green: #22c55e;
+      --red: #ef4444;
+      --yellow: #f59e0b;
+      --text: #f1f1f5;
+      --muted: #6b7280;
+      --radius: 14px;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 32px 24px;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      top: -200px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, #7c5cfc22 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 520px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Header */
+    .header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .logo-icon {
+      width: 42px;
+      height: 42px;
+      background: linear-gradient(135deg, #7c5cfc, #a78bfa);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+
+    .logo-text {
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    .logo-text span {
+      color: var(--accent2);
+    }
+
+    .tagline {
+      color: var(--muted);
+      font-size: 14px;
+      margin-top: 4px;
+    }
+
+    .live-dot {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      background: var(--green);
+      border-radius: 50%;
+      margin-right: 6px;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    /* Card */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+      margin-bottom: 20px;
+    }
+
+    .field {
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      margin-bottom: 6px;
+      color: #c4c4d0;
+    }
+
+    input,
+    textarea {
+      width: 100%;
+      background: #0d0d14;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input:focus,
+    textarea:focus {
+      border-color: var(--accent);
+    }
+
+    input::placeholder,
+    textarea::placeholder {
+      color: var(--muted);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 90px;
+      line-height: 1.5;
+    }
+
+    .phone-hint {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 22px 0;
+    }
+
+    .from-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #0d0d14;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 13px;
+      color: var(--muted);
+      width: 100%;
+    }
+
+    .from-badge strong {
+      color: var(--text);
+    }
+
+    /* Call button */
+    .btn-call {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, #7c5cfc, #a78bfa);
+      border: none;
+      border-radius: 10px;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+
+    .btn-call:hover {
+      opacity: 0.9;
+    }
+
+    .btn-call:active {
+      transform: scale(0.98);
+    }
+
+    .btn-call:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-call .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: none;
+    }
+
+    .btn-call.loading .spinner {
+      display: block;
+    }
+
+    .btn-call.loading .btn-label {
+      display: none;
+    }
+
+    /* Status */
+    .status-box {
+      margin-top: 14px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 500;
+      display: none;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .status-box.success {
+      display: flex;
+      gap: 10px;
+      background: #16271e;
+      border: 1px solid #22c55e33;
+      color: var(--green);
+    }
+
+    .status-box.error {
+      display: flex;
+      gap: 10px;
+      background: #270d0d;
+      border: 1px solid #ef444433;
+      color: var(--red);
+    }
+
+    .status-box .icon {
+      font-size: 15px;
+      flex-shrink: 0;
+    }
+
+    .status-detail {
+      font-size: 11px;
+      margin-top: 2px;
+      opacity: 0.7;
+      font-weight: 400;
+      word-break: break-all;
+    }
+
+    /* History */
+    .history-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    }
+
+    .history-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .history-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .refresh-btn {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--muted);
+      font-size: 11px;
+      padding: 4px 10px;
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      transition: all 0.2s;
+    }
+
+    .refresh-btn:hover {
+      color: var(--text);
+      border-color: var(--accent);
+    }
+
+    .history-list {
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .history-list::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .history-list::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .history-list::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 2px;
+    }
+
+    .history-item {
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .history-item:last-child {
+      border-bottom: none;
+    }
+
+    .history-item:hover {
+      background: #ffffff04;
+    }
+
+    .call-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      flex-shrink: 0;
+    }
+
+    .call-icon.completed {
+      background: #16271e;
+    }
+
+    .call-icon.failed,
+    .call-icon.canceled {
+      background: #270d0d;
+    }
+
+    .call-icon.queued,
+    .call-icon.in-progress,
+    .call-icon.ringing {
+      background: #1a1a0a;
+    }
+
+    .call-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .call-number {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .call-time {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .call-meta {
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    .call-duration {
+      font-size: 13px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .call-duration.completed {
+      color: var(--green);
+    }
+
+    .call-duration.failed {
+      color: var(--red);
+    }
+
+    .call-duration.queued {
+      color: var(--yellow);
+    }
+
+    .call-status-badge {
+      font-size: 10px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 2px;
+    }
+
+    .history-empty {
+      padding: 32px 20px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .history-loading {
+      padding: 24px 20px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    /* Stats row */
+    .stats-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 1px;
+      background: var(--border);
+      border-top: 1px solid var(--border);
+    }
+
+    .stat-box {
+      background: var(--card);
+      padding: 14px 16px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--accent2);
+    }
+
+    .stat-label {
+      font-size: 10px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 2px;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(4px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.3;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">
+        <div class="logo-icon">📞</div>
+        <div class="logo-text">Alora <span>AI</span></div>
+      </div>
+      <p class="tagline"><span class="live-dot"></span>AI Voice Agent — Test Console</p>
+    </div>
+
+    <!-- Call Card -->
+    <div class="card">
+      <div class="field">
+        <label>Call To</label>
+        <input type="tel" id="toNumber" placeholder="+91 XXXXX XXXXX" autocomplete="off" />
+        <p class="phone-hint">Include country code e.g. +91 for India</p>
+      </div>
+
+      <div class="field">
+        <label>From Number</label>
+        <div class="from-badge">
+          <span>📱</span>
+          <span><strong>+12253995076</strong> &nbsp;·&nbsp; Twilio</span>
+        </div>
+      </div>
+
+      <hr class="divider" />
+
+      <div class="field">
+        <label>System Prompt</label>
+        <textarea id="systemPrompt"
+          placeholder="Describe how the AI should behave...">You are a helpful AI assistant. Greet the caller warmly and ask how you can help them today. Keep responses short and friendly.</textarea>
+      </div>
+
+      <button class="btn-call" id="callBtn" onclick="makeCall()">
+        <div class="spinner"></div>
+        <span class="btn-label">📞 &nbsp; Start Call</span>
+      </button>
+
+      <div class="status-box" id="statusBox">
+        <div class="icon" id="statusIcon"></div>
+        <div>
+          <div id="statusMsg"></div>
+          <div class="status-detail" id="statusDetail"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- History Card -->
+    <div class="history-card">
+      <div class="history-header">
+        <span class="history-title">📋 Recent Calls</span>
+        <button class="refresh-btn" onclick="loadHistory()">↻ Refresh</button>
+      </div>
+      <div class="history-list" id="historyList">
+        <div class="history-loading">Loading history…</div>
+      </div>
+      <div class="stats-row" id="statsRow" style="display:none">
+        <div class="stat-box">
+          <div class="stat-value" id="statTotal">0</div>
+          <div class="stat-label">Total Calls</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value" id="statCompleted">0</div>
+          <div class="stat-label">Completed</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value" id="statAvgDur">0s</div>
+          <div class="stat-label">Avg Duration</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = 'http://localhost:8027';
+    const FROM_NUMBER = '+12253995076';
+    const AUTH_HEADERS = {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer oauth_success_token',
+      'x-user-id': '655b1b48-66b6-4455-9a92-3fcac8c377eb',
+      'x-user-email': 'rahulsamineni1234@gmail.com'
+    };
+
+    function fmtDuration(secs) {
+      if (!secs && secs !== 0) return '—';
+      if (secs === 0) return '0s';
+      const m = Math.floor(secs / 60), s = secs % 60;
+      return m > 0 ? `${m}m ${s}s` : `${s}s`;
+    }
+
+    function fmtTime(iso) {
+      if (!iso) return '';
+      const d = new Date(iso);
+      return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) +
+        ' · ' + d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function statusIcon(status) {
+      const icons = { completed: '✅', failed: '❌', canceled: '🚫', 'in-progress': '🔄', ringing: '📳', queued: '⏳' };
+      return icons[status] || '📞';
+    }
+
+    async function loadHistory() {
+      const list = document.getElementById('historyList');
+      list.innerHTML = '<div class="history-loading">Loading…</div>';
+      try {
+        const res = await fetch(`${API_BASE}/api/calls/history?limit=20`, { headers: AUTH_HEADERS });
+        const data = await res.json();
+        const calls = data.calls || data || [];
+        renderHistory(calls);
+      } catch (e) {
+        list.innerHTML = '<div class="history-empty">⚠️ Could not load history</div>';
+      }
+    }
+
+    function renderHistory(calls) {
+      const list = document.getElementById('historyList');
+      const stats = document.getElementById('statsRow');
+
+      if (!calls.length) {
+        list.innerHTML = '<div class="history-empty">No calls yet. Make your first call above!</div>';
+        stats.style.display = 'none';
+        return;
+      }
+
+      list.innerHTML = calls.map(c => {
+        const st = c.status || 'unknown';
+        const dur = c.duration ?? c.call_duration;
+        const durClass = st === 'completed' ? 'completed' : (st === 'failed' || st === 'canceled') ? 'failed' : 'queued';
+        return `
+          <div class="history-item">
+            <div class="call-icon ${st}">${statusIcon(st)}</div>
+            <div class="call-info">
+              <div class="call-number">${c.to_number || c.to || '—'}</div>
+              <div class="call-time">${fmtTime(c.created_at)}</div>
+            </div>
+            <div class="call-meta">
+              <div class="call-duration ${durClass}">${fmtDuration(dur)}</div>
+              <div class="call-status-badge">${st}</div>
+            </div>
+          </div>`;
+      }).join('');
+
+      // Stats
+      const completed = calls.filter(c => c.status === 'completed');
+      const durations = completed.map(c => c.duration ?? c.call_duration).filter(d => d > 0);
+      const avg = durations.length ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length) : 0;
+      document.getElementById('statTotal').textContent = calls.length;
+      document.getElementById('statCompleted').textContent = completed.length;
+      document.getElementById('statAvgDur').textContent = fmtDuration(avg);
+      stats.style.display = 'grid';
+    }
+
+    async function makeCall() {
+      const toNumber = document.getElementById('toNumber').value.trim().replace(/[\s\-]/g, '');
+      const systemPrompt = document.getElementById('systemPrompt').value.trim();
+      const btn = document.getElementById('callBtn');
+      const box = document.getElementById('statusBox');
+
+      if (!toNumber) { showStatus('error', 'Enter a phone number first', ''); return; }
+
+      btn.classList.add('loading'); btn.disabled = true;
+      box.className = 'status-box';
+
+      try {
+        const res = await fetch(`${API_BASE}/api/calls/make`, {
+          method: 'POST', headers: AUTH_HEADERS,
+          body: JSON.stringify({ to: toNumber, from: FROM_NUMBER, system_prompt: systemPrompt || undefined })
+        });
+        const data = await res.json();
+        if (res.ok && data.call_sid) {
+          showStatus('success', `📞 Calling ${toNumber}…`, `SID: ${data.call_sid} · ${data.status}`);
+          setTimeout(loadHistory, 5000); // refresh history after 5s
+        } else {
+          showStatus('error', 'Call failed', data.detail || JSON.stringify(data));
+        }
+      } catch (err) {
+        showStatus('error', 'Cannot reach server — is it running?', err.message);
+      } finally {
+        btn.classList.remove('loading'); btn.disabled = false;
+      }
+    }
+
+    function showStatus(type, msg, detail) {
+      const box = document.getElementById('statusBox');
+      document.getElementById('statusMsg').textContent = msg;
+      document.getElementById('statusDetail').textContent = detail;
+      box.className = `status-box ${type}`;
+      document.getElementById('statusIcon').textContent = type === 'success' ? '✅' : '❌';
+    }
+
+    document.getElementById('toNumber').addEventListener('keydown', e => { if (e.key === 'Enter') makeCall(); });
+
+    // Auto load history on start
+    loadHistory();
+  </script>
+</body>
+
+</html>
