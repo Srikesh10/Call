@@ -1,6 +1,5 @@
 # Environment variables
 .env
-.env.twilio.template
 
 # Python
 __pycache__/
@@ -15,10 +14,12 @@ ENV/
 .vscode/
 .idea/
 
-# System-generated
+# AI tools
 .gemini/
 .antigravity/
 .agent/
+
+# Project-specific generated files
 _archive/
 *.log
 
