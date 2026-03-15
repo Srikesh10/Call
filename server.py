@@ -1,5 +1,6 @@
 import os
 import sys
+import logging
 from typing import Optional
 
 # Windows Unicode Fix
@@ -8,6 +9,15 @@ sys.stdout.reconfigure(encoding='utf-8')
 from dotenv import load_dotenv
 # Load env variables FIRST
 load_dotenv()
+
+# ── Structured Logging ────────────────────────────────────────────────────────
+# All modules use `logging.getLogger("alora.<module>")` for consistent output.
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+    datefmt="%H:%M:%S"
+)
+logger = logging.getLogger("alora.server")
 
 # Global Constant to avoid UnboundLocalError in functions
 GROQ_KEY = os.environ.get("GROQ_API_KEY")
@@ -785,7 +795,8 @@ async def twilio_ws_endpoint(websocket: WebSocket):
                          try:
                              call_ctx = json.loads(call_context_str)
                              agent.update_call_context(call_ctx)
-                         except: pass
+                         except Exception as e:
+                             logger.warning(f"Failed to parse call context JSON: {e}")
 
                     # 3. Add Mode Header (Optional, user wanted Clean)
                     # agent.system_instruction = f"[MODE: {call_type.upper()} CALL]\n" + agent.system_instruction
@@ -1179,8 +1190,8 @@ async def twilio_ws_endpoint(websocket: WebSocket):
                         if user.email == user_email_for_call:
                             fallback_user_id = user.id
                             break
-                except:
-                    pass
+                except Exception as e:
+                    logger.warning(f"Fallback user lookup failed: {e}")
             
             if fallback_user_id:
                 # Create a fallback call log
@@ -1268,8 +1279,8 @@ async def browser_ws_endpoint(websocket: WebSocket):
                 if user_response and user_response.user:
                     user_id = user_response.user.id
                     print(f"[BROWSER] Supabase User: {user_id}", flush=True)
-             except:
-                 print("[BROWSER] Invalid User Token", flush=True)
+             except Exception as e:
+                 logger.warning(f"Browser WS: invalid user token: {e}")
         
         # Load Settings
         settings = {}
