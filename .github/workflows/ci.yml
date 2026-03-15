@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-boot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Lint with flake8 (non-blocking)
+        run: |
+          pip install flake8
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        continue-on-error: true
+
+      - name: Boot test
+        run: |
+          python -c "from server import app; print('BOOT OK')"
+        env:
+          GROQ_API_KEY: "test"
+          SUPABASE_URL: "https://test.supabase.co"
+          SUPABASE_KEY: "test"
+          TWILIO_MASTER_ACCOUNT_SID: "test"
+          TWILIO_MASTER_AUTH_TOKEN: "test"
+          DEBUG_MODE: "true"

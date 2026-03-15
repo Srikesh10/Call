@@ -146,6 +146,29 @@ def _validate_twilio_request(request: Request, form_data: dict) -> bool:
 
 app.include_router(knowledge_router)
 
+# Call management router (list numbers, make/hangup calls, history, webhooks)
+from routes.calls import router as calls_router
+app.include_router(calls_router)
+
+# Workflow CRUD router (deduplicated from 3x definitions)
+from routes.workflows import router as workflows_router
+app.include_router(workflows_router)
+
+# Data endpoints (leads, inventory, knowledge base)
+from routes.data import router as data_router
+app.include_router(data_router)
+
+# ── Health Check Endpoints ────────────────────────────────────────────────────
+# Used by load balancers and deployment platforms to check if the server is alive.
+@app.get("/health")
+async def health_check():
+    return {"status": "ok"}
+
+@app.get("/ready")
+async def readiness_check():
+    return {"status": "ready"}
+# ──────────────────────────────────────────────────────────────────────────────
+
 # Serve static UI files
 import os as _os
 _static_dir = _os.path.join(_os.path.dirname(__file__), "static")
@@ -433,269 +456,9 @@ async def get_twilio_status(user: dict = Depends(get_current_user)):
 
 # --- OUTBOUND CALLS API ENDPOINTS ---
 
-class MakeCallRequest(BaseModel):
-    to: str  # Destination phone number
-    from_: str = Field(..., alias="from")  # Source phone number
-    context: Optional[dict] = {}  # Context data (e.g. from Google Sheet)
-    system_prompt: Optional[str] = None  # Custom system instructions
 
-# List Twilio phone numbers
-@app.get("/api/calls/numbers")
-async def list_twilio_numbers(user: dict = Depends(get_current_user)):
-    """
-    List all Twilio phone numbers available on the main account.
-    """
-    try:
-        provisioner = get_provisioner()
-        client = provisioner.client
-        
-        incoming_numbers = client.incoming_phone_numbers.list(limit=50)
-        
-        numbers = []
-        for record in incoming_numbers:
-            numbers.append({
-                "phone_number": record.phone_number,
-                "friendly_name": record.friendly_name,
-                "sid": record.sid
-            })
-        
-        return {"numbers": numbers}
-    except Exception as e:
-        print(f"[CALLS] Error fetching numbers: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to fetch phone numbers: {str(e)}")
+# --- CALL ENDPOINTS MOVED TO routes/calls.py ---
 
-# Make outbound call
-@app.post("/api/calls/make")
-@_limiter.limit("20/minute")
-async def make_outbound_call(call_req: MakeCallRequest, request: Request, user: dict = Depends(get_current_user)):
-    """
-    Initiate an outbound call using Twilio with context.
-    """
-    try:
-        provisioner = get_provisioner()
-        client = provisioner.client
-        
-        print(f"[CALLS] Making call from {call_req.from_} to {call_req.to} with context keys: {list(call_req.context.keys()) if call_req.context else 'None'}")
-        print(f"[DEBUG] Call Request System Prompt: '{call_req.system_prompt}'")
-        print(f"[DEBUG] Call Request Context: {call_req.context}")
-        
-        # Dynamic Host for TwiML — prefer BASE_URL env var, fallback to request host
-        base_url = os.environ.get("BASE_URL", "").rstrip("/")
-        if not base_url:
-            host = request.headers.get("host", "tinselly-incompliant-earlean.ngrok-free.dev")
-            proto = "https" if "localhost" not in host else "http"
-            base_url = f"{proto}://{host}"
-        
-        # Encode Context for URL
-        import urllib.parse
-        # Serialize context & prompt
-        # Serialize context & prompt
-        ctx = call_req.context or {}
-        ctx['call_type'] = 'outbound' # BACKUP: Inject into context
-        
-        # --- WORKFLOW ROUTING (OUTBOUND) ---
-        system_prompt = call_req.system_prompt
-        
-        try:
-            # Find active workflow for outbound calls
-            from backend.supabase_client import supabase_adapter
-            wf = supabase_adapter.get_active_workflow_for_trigger(user['id'], trigger_type='call_ended', run_on='outbound')
-            if wf:
-                # PROMPT INJECTION REMOVED PER USER REQUEST
-                # Only inject workflow_id for routing
-                print(f"[OUTBOUND] 🚀 Linked Outbound Workflow: {wf['name']}")
-                # Inject workflow_id
-                ctx['workflow_id'] = wf['id']
-        except Exception as e:
-            print(f"[OUTBOUND] Workflow lookup error: {e}")
-
-        context_json = json.dumps(ctx)
-        context_encoded = urllib.parse.quote(context_json)
-        
-        prompt_encoded = urllib.parse.quote(system_prompt or "")
-
-        # Sanitize phone number — strip spaces (e.g. "+91 7569247122" → "+917569247122")
-        clean_to = call_req.to.replace(" ", "").replace("-", "")
-        phone_encoded = urllib.parse.quote(clean_to)
-
-        # TwiML URL pointing to our incoming handler
-        twiml_url = f"{base_url}/twilio/incoming?call_type=outbound&phone={phone_encoded}&context={context_encoded}&prompt={prompt_encoded}"
-        print(f"[OUTBOUND] Generated TwiML URL: {twiml_url}") # DEBUG
-        
-        call = client.calls.create(
-            to=call_req.to,
-            from_=call_req.from_,
-            url=twiml_url,
-            status_callback=f"{base_url}/api/calls/status",
-            status_callback_event=['initiated', 'ringing', 'answered', 'completed'],
-            status_callback_method='POST'
-        )
-        
-        # Persist to Database immediately
-        try:
-            # Legacy automation rules fetching REMOVED. 
-            # Workflow Engine now handles this via process_call_background.
-            active_rules = []
-
-
-            supabase.table("outbound_calls").insert({
-                "user_id": user.id,
-                "call_sid": call.sid,
-                "to_number": call_req.to,
-                "from_number": call_req.from_,
-                "status": call.status,
-                "system_instruction": call_req.system_prompt,
-                "context_data": call_req.context,
-                "active_rules": active_rules # Store active rules snapshot
-            }).execute()
-        except Exception as db_err:
-            print(f"[CALLS] DB Insert Error: {db_err}")
-            # Non-blocking, continue
-        
-        print(f"[CALLS] Call created: {call.sid}, Status: {call.status}")
-        
-        return {
-            "call_sid": call.sid,
-            "status": call.status,
-            "to": call_req.to,
-            "from": call_req.from_
-        }
-    except Exception as e:
-        print(f"[CALLS] Error making call: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to make call: {str(e)}")
-
-# Get active calls
-@app.get("/api/calls/active")
-async def get_active_calls(user: dict = Depends(get_current_user)):
-    """
-    Get all currently active/in-progress calls.
-    """
-    try:
-        provisioner = get_provisioner()
-        client = provisioner.client
-        
-        # Fetch calls with status: queued, ringing, in-progress
-        active_statuses = ['queued', 'ringing', 'in-progress']
-        calls = []
-        
-        for status in active_statuses:
-            active_calls = client.calls.list(status=status, limit=20)
-            for call in active_calls:
-                calls.append({
-                    "sid": call.sid,
-                    "to": call.to,
-                    "from": call.from_,
-                    "status": call.status,
-                    "duration": call.duration,
-                    "start_time": str(call.start_time) if call.start_time else None
-                })
-        
-        return {"calls": calls}
-    except Exception as e:
-        print(f"[CALLS] Error fetching active calls: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to fetch active calls: {str(e)}")
-
-# Get call history with pagination
-@app.get("/api/calls/history")
-async def get_call_history(
-    page: int = 0,
-    limit: int = 20,
-    user: dict = Depends(get_current_user)
-):
-    """
-    Get call history with pagination.
-    """
-    try:
-        provisioner = get_provisioner()
-        client = provisioner.client
-        
-        # DB Query for History
-        start = page * limit
-        end = start + limit - 1
-        
-        res = supabase.table("outbound_calls")\
-            .select("*")\
-            .eq("user_id", user.id)\
-            .order("created_at", desc=True)\
-            .range(start, end)\
-            .execute()
-            
-        calls = res.data if res.data else []
-        
-        formatted_calls = []
-        for c in calls:
-            formatted_calls.append({
-                "sid": c['call_sid'],
-                "to": c['to_number'],
-                "from": c['from_number'],
-                "status": c['status'],
-                "duration": c['duration'],
-                "price": c['cost'],
-                "start_time": c['created_at'],
-                "date_created": c['created_at'],
-                "system_prompt": c.get('system_prompt')
-            })
-            
-        return {"calls": formatted_calls, "page": page}
-    except Exception as e:
-        print(f"[CALLS] Error fetching call history: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to fetch call history: {str(e)}")
-
-# Hangup a call
-@app.post("/api/calls/{call_sid}/hangup")
-async def hangup_call(call_sid: str, user: dict = Depends(get_current_user)):
-    """
-    End/hangup an active call.
-    """
-    try:
-        provisioner = get_provisioner()
-        client = provisioner.client
-        
-        print(f"[CALLS] Hanging up call: {call_sid}")
-        
-        call = client.calls(call_sid).update(status='completed')
-        
-        return {
-            "call_sid": call.sid,
-            "status": call.status
-        }
-    except Exception as e:
-        print(f"[CALLS] Error hanging up call: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to hangup call: {str(e)}")
-
-# Webhook for Call Status
-@app.post("/api/calls/status")
-async def call_status_webhook(request: Request):
-    """
-    Webhook to receive call status updates from Twilio.
-    """
-    try:
-        data = await request.form()
-        call_sid = data.get('CallSid')
-        status = data.get('CallStatus')
-        duration = data.get('CallDuration')
-        
-        # Attempt to get price if available
-        # Twilio sends 'CallStatus' as 'completed' when done.
-        
-        update_data = {"status": status}
-        if duration:
-            update_data["duration"] = int(duration)
-        
-        # Use Service Role via adapter? 
-        # Since we imported 'supabase' client which might be initialized with service role if env var set.
-        # Assuming backend runs with service role env var.
-        
-        if call_sid:
-            supabase.table("outbound_calls").update(update_data).eq("call_sid", call_sid).execute()
-            # print(f"[WEBHOOK] Updated call {call_sid} to status {status}")
-            
-    except Exception as e:
-        print(f"[WEBHOOK] Error processing status: {e}")
-    
-    return Response(content="<Response/>", media_type="application/xml")
-
-# ---END OUTBOUND CALLS---
 
 
 # --- INTEGRATION CONFIGURATION ---
@@ -1987,64 +1750,6 @@ async def delete_integration(rule_id: str, user: dict = Depends(get_current_user
          return {"status": "success"}
     return JSONResponse(status_code=500, content={"status": "error", "message": "Invalid index or save failed"})
 
-@app.get("/api/calls")
-async def get_calls(user: dict = Depends(get_current_user)):
-    from backend.supabase_client import supabase_adapter
-    try:
-        # Debug: Log user info
-        user_id = getattr(user, 'id', None) or (user.get('id') if isinstance(user, dict) else None)
-        print(f"[CALLS API] Fetching calls for user: {user_id}")
-        
-        # Use Supabase Adapter with User ID
-        calls = supabase_adapter.get_calls(user_id)
-        print(f"[CALLS API] Found {len(calls) if calls else 0} calls")
-        
-        return calls if calls else []
-    except Exception as e:
-         print(f"[CALLS API] Error getting calls: {e}")
-         import traceback
-         traceback.print_exc()
-         return []
-
-@app.get("/api/leads")
-async def get_leads(user: dict = Depends(get_current_user)):
-    return supabase_adapter.get_leads(user.id)
-
-@app.get("/api/inventory")
-async def get_inventory(): # Public for Agent? Or Protected? Public for now.
-    return supabase_adapter.get_inventory()
-
-@app.post("/api/upload_inventory")
-async def upload_inventory(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
-    try:
-        # Save to a temporary file or process directly
-        file_content = await file.read()
-        # Assuming supabase_adapter has a method to handle inventory upload
-        success = supabase_adapter.upload_inventory(user.id, file_content, file.filename)
-        if success:
-            return {"status": "success"}
-        else:
-            return JSONResponse(status_code=500, content={"status": "error", "message": "Failed to upload inventory to DB"})
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"status": f"error: {e}"})
-
-@app.delete("/api/leads/{lead_id}")
-async def delete_lead(lead_id: str, user: dict = Depends(get_current_user)):
-    if supabase_adapter.delete_lead(user.id, lead_id):
-        return {"status": "success"}
-    return JSONResponse(status_code=500, content={"status": "error", "message": "Failed to delete lead"})
-
-@app.get("/api/kb")
-async def get_kb(user: dict = Depends(get_current_user)):
-    return JSONResponse(content={"text": supabase_adapter.get_knowledge_base(user.id)})
-
-@app.post("/api/kb")
-async def save_kb(payload: dict, user: dict = Depends(get_current_user)):
-    text = payload.get("text", "")
-    if supabase_adapter.save_knowledge_base(user.id, text):
-         return {"status": "success"}
-    return JSONResponse(status_code=500, content={"status": "error"})
-
 @app.get("/api/user/profile")
 async def get_user_profile(user: dict = Depends(get_current_user)):
     """Returns the authenticated user's profile data."""
@@ -2154,88 +1859,7 @@ async def get_sheets(user: dict = Depends(get_current_user)):
             
         files = await list_google_sheets(access_token)
         return {"status": "success", "files": files}
-        
     except Exception as e:
-        print(f"[API ERROR] Failed to list sheets: {e}")
-        return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
-
-
-# --- WORKFLOWS API ---
-
-class WorkflowData(BaseModel):
-    id: Optional[str] = None
-    name: str = "Untitled Workflow"
-    trigger_type: str = "call_ended"
-    trigger_config: dict = {}
-    steps: list = []
-    is_active: bool = True
-
-@app.get("/api/workflows")
-async def list_workflows(user: dict = Depends(get_current_user)):
-    """List all workflows for the user"""
-    try:
-        from backend.supabase_client import supabase_adapter
-        workflows = supabase_adapter.get_workflows(user.id)
-        return {"status": "success", "workflows": workflows}
-    except Exception as e:
-        print(f"[API ERROR] Failed to list workflows: {e}")
-        return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
-
-@app.get("/api/workflows/{workflow_id}")
-async def get_workflow(workflow_id: str, user: dict = Depends(get_current_user)):
-    """Get a single workflow"""
-    try:
-        from backend.supabase_client import supabase_adapter
-        workflow = supabase_adapter.get_workflow_by_id(workflow_id)
-        
-        if not workflow:
-            return JSONResponse(status_code=404, content={"status": "error", "message": "Workflow not found"})
-            
-        # Security check
-        if workflow["user_id"] != user.id:
-             return JSONResponse(status_code=403, content={"status": "error", "message": "Unauthorized"})
-
-        return {"status": "success", "workflow": workflow}
-    except Exception as e:
-        print(f"[API ERROR] Failed to get workflow: {e}")
-        return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
-
-@app.post("/api/workflows/save")
-async def save_workflow(payload: WorkflowData, user: dict = Depends(get_current_user)):
-    """Save/Upsert a workflow"""
-    try:
-        from backend.supabase_client import supabase_adapter
-        
-        # Prepare data dictionary
-        data = payload.dict(exclude_none=True)
-        
-        # Save via adapter
-        result = supabase_adapter.save_workflow(user.id, data)
-        
-        if result:
-            return {"status": "success", "workflow": result}
-        else:
-             return JSONResponse(status_code=500, content={"status": "error", "message": "Failed to save workflow"})
-        
-    except Exception as e:
-        print(f"[API ERROR] Failed to save workflow: {e}")
-        return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
-
-@app.delete("/api/workflows/{workflow_id}")
-async def delete_workflow(workflow_id: str, user: dict = Depends(get_current_user)):
-    """Delete a workflow"""
-    try:
-        from backend.supabase_client import supabase_adapter
-        
-        success = supabase_adapter.delete_workflow(user.id, workflow_id)
-        
-        if success:
-            return {"status": "success"}
-        else:
-             return JSONResponse(status_code=500, content={"status": "error", "message": "Failed to delete workflow"})
-        
-    except Exception as e:
-        print(f"[API ERROR] Failed to delete workflow: {e}")
         return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
 
 @app.get("/api/sheets/{sheet_id}/columns")
@@ -2882,51 +2506,6 @@ class WorkflowStep(BaseModel):
     routing_rules: list | None = None
     summary: str | None = None
     smart_instruction: str | None = None # NEW
-
-class WorkflowPayload(BaseModel):
-    id: str | None = None
-    name: str
-    description: str | None = None
-    trigger_type: str
-    trigger_config: dict | None = None
-    steps: list[WorkflowStep]
-    is_active: bool = True
-
-@app.get("/api/workflows")
-async def list_workflows(user: dict = Depends(get_current_user)):
-    from backend.supabase_client import supabase_adapter
-    workflows = supabase_adapter.get_workflows(user.id)
-    return {"status": "success", "workflows": workflows}
-
-@app.get("/api/workflows/{workflow_id}")
-async def get_workflow(workflow_id: str, user: dict = Depends(get_current_user)):
-    from backend.supabase_client import supabase_adapter
-    wf = supabase_adapter.get_workflow_by_id(workflow_id)
-    if not wf:
-        return JSONResponse(status_code=404, content={"status": "error", "message": "Not found"})
-    return {"status": "success", "workflow": wf}
-
-@app.post("/api/workflows/save")
-async def save_workflow(payload: WorkflowPayload, user: dict = Depends(get_current_user)):
-    from backend.supabase_client import supabase_adapter
-    
-    # Convert Pydantic to dict
-    wf_data = payload.dict()
-    
-    saved_wf = supabase_adapter.save_workflow(user.id, wf_data)
-    
-    if saved_wf:
-        return {"status": "success", "workflow": saved_wf}
-    else:
-        return JSONResponse(status_code=500, content={"status": "error", "message": "Failed to save"})
-
-@app.delete("/api/workflows/{workflow_id}")
-async def delete_workflow(workflow_id: str, user: dict = Depends(get_current_user)):
-    from backend.supabase_client import supabase_adapter
-    success = supabase_adapter.delete_workflow(user.id, workflow_id)
-    if success:
-        return {"status": "success"}
-    return JSONResponse(status_code=500, content={"status": "error"})
 
 if __name__ == "__main__":
     import uvicorn
